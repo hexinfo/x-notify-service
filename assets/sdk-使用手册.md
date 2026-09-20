@@ -4,7 +4,7 @@
 
 ## 1. 环境要求
 
-- 支持ES Module 的现代浏览器
+- 现代浏览器，基线 Chrome/Chromium 87（同级即可：Edge ≥ 88、Firefox ≥ 78、Safari ≥ 14；不支持 IE）
 - 本机已安装并运行 x-notify-service（未安装时 SDK 静默失败，不报错）
 
 ## 2. 引入方式
@@ -18,7 +18,25 @@
 </script>
 ```
 
-sdk.js 获取途径：发行包内、Linux `~/.local/share/x-notify-service/`、Windows 安装目录。
+不支持 ESM 的老项目用 `sdk.umd.js`（UMD 格式，兼容 RequireJS 等 AMD 加载器与普通 `<script>` 标签）：
+
+```html
+<!-- AMD(RequireJS) -->
+<script src="require.js"></script>
+<script>
+  require(['sdk.umd'], function (XNotifyServiceSdk) {
+    var svc = XNotifyServiceSdk.createNotifyService()
+  })
+</script>
+
+<!-- 普通脚本标签(暴露全局 XNotifyServiceSdk) -->
+<script src="./sdk.umd.js"></script>
+<script>
+  var svc = window.XNotifyServiceSdk.createNotifyService()
+</script>
+```
+
+sdk.js / sdk.umd.js 获取途径：发行包内、Linux `~/.local/share/x-notify-service/`、Windows 安装目录。
 
 ## 3. 快速开始
 

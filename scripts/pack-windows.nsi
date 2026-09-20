@@ -40,6 +40,7 @@ Section "安装"
     File "${STAGE}\x-notify-service.exe"
     File /nonfatal "${STAGE}\config.toml"
     File "${STAGE}\sdk.js"
+    File "${STAGE}\sdk.umd.js"
     File "${STAGE}\sdk-manual.md"
 
     WriteRegStr HKCU "Software\${APPNAME}" "InstallDir" "$INSTDIR"
@@ -56,7 +57,7 @@ Section "安装"
 
     ; 静默完成安装:注册自启动+协议并分离启动服务(install 立即返回,不阻塞安装器)
     Exec '"$INSTDIR\${APPNAME}.exe" install'
-    DetailPrint "安装完成。SDK:安装目录内 sdk.js / sdk-manual.md"
+    DetailPrint "安装完成。SDK:安装目录内 sdk.js / sdk.umd.js / sdk-manual.md"
     DetailPrint "快速测试:浏览器打开 http://127.0.0.1:17320/"
 SectionEnd
 
@@ -69,6 +70,7 @@ Section "Uninstall"
     Sleep 500
     Delete "$INSTDIR\${APPNAME}.exe"
     Delete "$INSTDIR\sdk.js"
+    Delete "$INSTDIR\sdk.umd.js"
     Delete "$INSTDIR\sdk-manual.md"
     Delete "$INSTDIR\uninstall.exe"
     RMDir "$INSTDIR"

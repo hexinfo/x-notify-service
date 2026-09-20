@@ -46,7 +46,7 @@ if [ -d "$SRC_DIR/icons" ]; then
 fi
 # SDK 与手册放置到用户数据目录
 mkdir -p "$HOME/.local/share/x-notify-service"
-cp "$SRC_DIR/sdk.js" "$SRC_DIR/sdk-使用手册.md" "$HOME/.local/share/x-notify-service/"
+cp "$SRC_DIR/sdk.js" "$SRC_DIR/sdk.umd.js" "$SRC_DIR/sdk-使用手册.md" "$HOME/.local/share/x-notify-service/"
 
 case ":$PATH:" in
     *":$BIN_DIR:"*) ;;

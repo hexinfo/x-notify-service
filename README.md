@@ -64,7 +64,7 @@ await svc.notify({ title: '工单提醒', body: '<b>紧急</b>工单<br>第二�
 const svc = createNotifyService({ token: '与服务端 config.toml 一致' })
 ```
 
-纯 ESM、零依赖;完整 API 见发行包内 `sdk-使用手册.md`。开发:`cd sdk/js && pnpm install && pnpm build`,演示页 `pnpm demo`。
+ESM 主产物 + UMD 兼容产物(`sdk.umd.js`,AMD 加载器/普通 script 标签),浏览器基线 Chrome 87;完整 API 见发行包内 `sdk-使用手册.md`。开发:`cd sdk/js && pnpm install && pnpm build`,演示页 `pnpm demo`。
 
 ## 已知限制
 

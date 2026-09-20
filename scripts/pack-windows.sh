@@ -22,6 +22,7 @@ mkdir -p "$STAGE" dist
 cp "target/$TARGET/release/x-notify-service.exe" "$STAGE/"
 cp scripts/templates/config.toml "$STAGE/config.toml"
 cp sdk/js/packages/sdk/dist/x-notify-service-sdk.js "$STAGE/sdk.js"
+cp sdk/js/packages/sdk/dist/x-notify-service-sdk.umd.js "$STAGE/sdk.umd.js"
 cp assets/sdk-使用手册.md "$STAGE/sdk-manual.md"
 cp assets/icons/x-notify-service.ico "$STAGE/"
 

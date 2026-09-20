@@ -1,5 +1,6 @@
 // SDK 语义测试(node --test,直接测 dist 产物;使用独立端口区间,不干扰本机服务)
 import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
 import http from 'node:http'
 import { afterEach, test } from 'node:test'
 
@@ -81,4 +82,36 @@ test('真服务:discover 命中并缓存,notify 送达 snake_case 字段,close �
 test('空标题:抛出参数错误(编程错误应显式暴露)', async () => {
   const bridge = createNotifyService({ basePort: 24590, portRange: 3 })
   await assert.rejects(() => bridge.notify({ title: ' ' }), /title/)
+})
+
+test('UMD 产物:AMD 分支(define.amd)与普通 script 全局分支可用', async () => {
+  const src = await readFile(
+    new URL('../dist/x-notify-service-sdk.umd.js', import.meta.url),
+    'utf8',
+  )
+  assert.match(src, /define\.amd/, 'UMD 包装须含 AMD 分支')
+
+  // 模拟 AMD 加载器(RequireJS 行为):命中 define.amd 分支,匿名模块 + 依赖 ['exports']
+  const captured = {}
+  const fakeDefine = (deps, factory) => {
+    captured.deps = deps
+    captured.exports = {}
+    factory(captured.exports)
+  }
+  fakeDefine.amd = true
+  globalThis.define = fakeDefine
+  try {
+    new Function(src)()
+  } finally {
+    delete globalThis.define
+  }
+  assert.deepEqual(captured.deps, ['exports'])
+  assert.equal(typeof captured.exports.createNotifyService, 'function')
+  assert.equal(captured.exports.DEFAULT_BASE_PORT, 17320)
+  assert.equal(captured.exports.PROTOCOL_URL, 'x-notify://launch')
+
+  // 普通脚本分支:暴露全局 XNotifyServiceSdk(new Function 体内 this 指向 globalThis)
+  new Function(src)()
+  assert.equal(typeof globalThis.XNotifyServiceSdk?.createNotifyService, 'function')
+  delete globalThis.XNotifyServiceSdk
 })
