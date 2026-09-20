@@ -21,7 +21,16 @@
 不支持 ESM 的老项目用 `sdk.umd.js`（UMD 格式，兼容 RequireJS 等 AMD 加载器与普通 `<script>` 标签）：
 
 ```html
-<!-- AMD(RequireJS) -->
+<!-- AMD(RequireJS):文件不在页面同目录时,先配 paths 别名(值不带 .js 后缀) -->
+<script src="require.js"></script>
+<script>
+  requirejs.config({ paths: { 'x-notify-sdk': '/assets/sdk.umd' } })
+  require(['x-notify-sdk'], function (XNotifyServiceSdk) {
+    var svc = XNotifyServiceSdk.createNotifyService()
+  })
+</script>
+
+<!-- 与页面同目录时可省略 config,直接按路径引用 -->
 <script src="require.js"></script>
 <script>
   require(['sdk.umd'], function (XNotifyServiceSdk) {
@@ -120,3 +129,6 @@ x-notify-service uninstall            # 停止服务并清理全部注册
 
 **Q：`via` 是什么？**
 `popup` = 右下角弹窗（主渠道）；`system` = 系统通知（兜底：无桌面会话/Wayland/弹窗初始化失败）。
+
+**Q：RequireJS 报 Mismatched anonymous define / 模块加载超时？**
+同一页面只用一种模块 ID 引用 SDK：配了 paths 别名就全程用别名，没配就全程用相对路径。两种混用会让同一文件按两个 ID 各加载一次，匿名模块在第二次注册时无脚本上下文即报错（匿名 UMD 库的通病，jQuery 同此）。也别把 `sdk.umd.js` 交给 r.js 优化器打进别的 bundle，按外部依赖独立加载即可。
