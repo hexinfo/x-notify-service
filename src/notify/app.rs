@@ -375,6 +375,7 @@ fn run(initial: Option<PopupPayload>) -> Result<(), AppError> {
             .with_quit_mode(QuitMode::Explicit)
             .run(move |cx| {
                 gpui_kit::init(cx);
+                super::window::hide_app_from_dock();
                 let controller = Rc::new(RefCell::new(PopupController::new(observed_failure)));
                 let on_close = Rc::clone(&controller);
                 cx.on_window_closed(move |cx, id| on_window_closed(&on_close, id, cx))

@@ -75,18 +75,24 @@ pub fn enable() -> Result<(), Box<dyn std::error::Error>> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    let content = format!(
+    std::fs::write(&path, linux_desktop_entry(&exe))?;
+    Ok(())
+}
+
+#[cfg(any(target_os = "linux", test))]
+fn linux_desktop_entry(exe: &std::path::Path) -> String {
+    format!(
         "[Desktop Entry]\n\
          Type=Application\n\
          Name={name}\n\
          Exec=\"{exe}\" {SERVE_ARG}\n\
          StartupWMClass={name}\n\
-         NoDisplay=true\n",
+         NoDisplay=true\n\
+         Terminal=false\n\
+         StartupNotify=false\n",
         name = crate::config::APP_DIR_NAME,
         exe = exe.display(),
-    );
-    std::fs::write(&path, content)?;
-    Ok(())
+    )
 }
 
 #[cfg(target_os = "macos")]
@@ -132,4 +138,17 @@ pub fn disable() -> Result<(), Box<dyn std::error::Error>> {
 #[allow(clippy::unnecessary_wraps)]
 pub fn is_enabled() -> Result<bool, Box<dyn std::error::Error>> {
     Ok(entry_path().exists())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::linux_desktop_entry;
+
+    #[test]
+    fn linux_autostart_is_hidden_and_terminal_free() {
+        let entry = linux_desktop_entry(std::path::Path::new("/opt/x-notify-service"));
+        assert!(entry.contains("NoDisplay=true\n"));
+        assert!(entry.contains("Terminal=false\n"));
+        assert!(entry.contains("StartupNotify=false\n"));
+    }
 }

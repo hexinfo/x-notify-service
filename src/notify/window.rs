@@ -162,6 +162,29 @@ pub fn window_options(area: WorkArea, popup_size: Size) -> WindowOptions {
     }
 }
 
+#[cfg(target_os = "macos")]
+const fn app_activation_policy() -> objc2_app_kit::NSApplicationActivationPolicy {
+    objc2_app_kit::NSApplicationActivationPolicy::Accessory
+}
+
+#[cfg(target_os = "macos")]
+pub fn hide_app_from_dock() {
+    use objc2::MainThreadMarker;
+    use objc2_app_kit::NSApplication;
+
+    let Some(main_thread) = MainThreadMarker::new() else {
+        log::error!("无法隐藏 Dock 图标:当前不在 macOS 主线程");
+        return;
+    };
+    let app = NSApplication::sharedApplication(main_thread);
+    if !app.setActivationPolicy(app_activation_policy()) {
+        log::warn!("macOS 拒绝切换到 Accessory 激活策略,Dock 图标可能可见");
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+pub const fn hide_app_from_dock() {}
+
 #[derive(Debug)]
 #[allow(clippy::module_name_repetitions)]
 pub struct WindowSyncError {
@@ -367,10 +390,10 @@ fn sync_x11(xid: u32, x: i32, y: i32, width: u32, height: u32) -> Result<(), Win
 
 #[cfg(test)]
 mod tests {
-    #[cfg(target_os = "macos")]
-    use super::popup_style_mask;
     #[cfg(target_os = "linux")]
     use super::{BackendKind, backend_kind_from_env};
+    #[cfg(target_os = "macos")]
+    use super::{app_activation_policy, popup_style_mask};
     use super::{popup_bounds, sync_geometry, work_area_with_layer_shell};
     use crate::{notify::popup::Size, screen::WorkArea};
     use gpui_kit::{AppContext as _, EmptyView, TestAppContext, px, size};
@@ -379,12 +402,16 @@ mod tests {
     #[cfg(target_os = "macos")]
     #[test]
     fn mac_popup_style_is_borderless_and_nonactivating() {
-        use objc2_app_kit::NSWindowStyleMask;
+        use objc2_app_kit::{NSApplicationActivationPolicy, NSWindowStyleMask};
 
         let mask = popup_style_mask();
         assert_eq!(
             (mask.bits(), mask.contains(NSWindowStyleMask::Titled)),
             (NSWindowStyleMask::NonactivatingPanel.bits(), false)
+        );
+        assert_eq!(
+            app_activation_policy(),
+            NSApplicationActivationPolicy::Accessory
         );
     }
 

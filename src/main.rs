@@ -1,5 +1,6 @@
-// Windows 发布形态为 GUI 子系统:服务常驻不弹控制台窗口,输出走日志文件
-#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+// Windows 始终使用 GUI 子系统:服务、自启动与双击均不创建控制台窗口；
+// CLI 从现有终端运行时由 windows_env 主动附着父控制台。
+#![cfg_attr(windows, windows_subsystem = "windows")]
 
 mod api;
 mod autostart;
@@ -140,6 +141,13 @@ fn park_system_service() -> ! {
 #[cfg(test)]
 mod lifecycle_tests {
     use super::record_gui_exit;
+
+    #[test]
+    fn windows_subsystem_is_gui_in_all_builds() {
+        assert!(
+            include_str!("main.rs").contains("cfg_attr(windows, windows_subsystem = \"windows\")")
+        );
+    }
 
     #[test]
     fn normal_gui_exit_disables_popup_channel() {

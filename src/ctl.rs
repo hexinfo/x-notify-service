@@ -99,7 +99,10 @@ pub fn start_detached() {
         return;
     };
     let mut cmd = std::process::Command::new(exe);
-    cmd.arg("serve");
+    cmd.arg("serve")
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null());
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt as _;
