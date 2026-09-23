@@ -51,8 +51,8 @@ n, raw = lines[-2:]
 assert n["summary"] == "兜底端到端", n
 assert n["body"] == "加粗 工单 与 代码", n
 assert raw["summary"] == "HTML 原样", raw
-assert raw["body"] == "保留 &lt;b&gt;原样&lt;/b&gt; &amp;", raw
-print("PASS: 系统通知兜底真实送达,Markdown 为纯文本且原样 HTML 已转义")
+assert raw["body"] == "保留 <b>原样</b> &", raw
+print("PASS: 系统通知兜底真实送达,Markdown 为纯文本且无 markup 能力时原样发送")
 EOF
 
 # CLI notify -f:强制兜底,应真实送达 mock 守护进程且退出码 0
