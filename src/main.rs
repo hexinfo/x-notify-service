@@ -5,10 +5,10 @@ mod api;
 mod autostart;
 mod config;
 mod ctl;
-mod html;
 mod info;
 mod install;
 mod logging;
+mod markdown_body;
 mod notify;
 mod protocol;
 mod screen;
@@ -91,7 +91,7 @@ fn main() {
     }
 }
 
-/// 服务主流程:单实例 → GUI 探测(先于 HTTP,避免启动早期请求降级)→ 绑端口 → 事件循环
+/// 服务主流程:单实例 → 绑端口 → GPUI 事件循环(失败后保持系统通知服务)
 fn serve(cfg: &config::Config) {
     log::info!(
         "x-notify-service {} 启动(默认端口 {},日志目录 {})",
@@ -105,22 +105,14 @@ fn serve(cfg: &config::Config) {
         return;
     }
 
-    // 先探测 GUI 并落定 POPUP_AVAILABLE,再开 HTTP:杜绝启动早期请求撞上降级窗口
-    let gui_ok = !cfg.no_popup && notify::popup::gui_probe();
-    notify::POPUP_AVAILABLE.store(gui_ok, std::sync::atomic::Ordering::Relaxed);
-    if !gui_ok {
-        if cfg.no_popup {
-            log::info!("--no-popup:通知全部走系统通知");
-        } else {
-            log::warn!("弹窗不可用,通知将走系统通知兜底");
-        }
-    }
+    notify::POPUP_AVAILABLE.store(false, std::sync::atomic::Ordering::Release);
 
     let port = server::start(cfg.clone());
     single::write_port_file(port);
     log::info!("服务已就绪: http://127.0.0.1:{port}");
 
-    if !gui_ok {
+    if cfg.no_popup {
+        log::info!("--no-popup:通知全部走系统通知");
         // 无 GUI 模式:主线程挂起,HTTP 工作线程继续服务
         #[allow(clippy::infinite_loop)]
         loop {
@@ -128,7 +120,7 @@ fn serve(cfg: &config::Config) {
         }
     }
 
-    // daemon:弹窗窗口关闭不会结束事件循环(服务常驻语义)
+    // QuitMode::Explicit:弹窗窗口关闭不会结束事件循环(服务常驻语义)
     if let Err(e) = notify::app::run_service() {
         log::error!("GUI 事件循环异常退出: {e}");
         // 通道已断,后续通知转系统通知兜底

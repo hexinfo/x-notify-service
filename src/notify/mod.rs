@@ -1,8 +1,10 @@
 pub mod app;
 pub mod fallback;
-pub mod popup;
 #[cfg(target_os = "linux")]
-pub mod window_icon;
+mod icon;
+pub mod popup;
+pub mod view;
+pub mod window;
 
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -19,13 +21,13 @@ pub trait Presenter {
     fn present(
         &self,
         title: &str,
-        body_html: &str,
+        body_markdown: &str,
         size: popup::Size,
         colors: popup::Colors,
     ) -> bool;
 }
 
-/// 右下角置顶弹窗(主渠道):经 bridge 通道投递给 iced 事件循环。
+/// 右下角置顶弹窗(主渠道):经 bridge 通道投递给 GPUI 事件循环。
 /// 通道天然按序投递,每条各触发一次内容更新——窗口单实例,
 /// 后到的通知自然顶掉先到的(latest-only 语义不变)。
 pub struct PopupPresenter;
@@ -34,24 +36,24 @@ impl Presenter for PopupPresenter {
     fn present(
         &self,
         title: &str,
-        body_html: &str,
+        body_markdown: &str,
         size: popup::Size,
         colors: popup::Colors,
     ) -> bool {
-        if !POPUP_AVAILABLE.load(Ordering::Relaxed) {
+        if !POPUP_AVAILABLE.load(Ordering::Acquire) {
             return false;
         }
-        let posted = app::post(app::Message::Notify {
+        let shown = app::present_notification(view::PopupPayload {
             title: title.to_owned(),
-            body_html: body_html.to_owned(),
-            quit_on_close: false,
+            body_markdown: body_markdown.to_owned(),
             size,
             colors,
+            quit_on_close: false,
         });
-        if !posted {
-            log::warn!("弹窗投递失败,降级系统通知");
+        if !shown {
+            log::warn!("弹窗展示未确认,降级系统通知");
         }
-        posted
+        shown
     }
 }
 
@@ -67,9 +69,93 @@ pub fn dispatch(cfg: &Config, req: &NotifyRequest) -> NotifyVia {
         req.body_background_color.as_deref(),
         req.body_text_color.as_deref(),
     );
-    if PopupPresenter.present(title, body, size, colors) {
+    present_with_fallback(
+        &PopupPresenter,
+        &fallback::SystemPresenter::new(cfg),
+        title,
+        body,
+        size,
+        colors,
+    )
+}
+
+fn present_with_fallback(
+    popup: &impl Presenter,
+    system: &impl Presenter,
+    title: &str,
+    body: &str,
+    size: popup::Size,
+    colors: popup::Colors,
+) -> NotifyVia {
+    if popup.present(title, body, size, colors) {
         return NotifyVia::Popup;
     }
-    fallback::SystemPresenter::new(cfg).present(title, body, size, colors);
+    system.present(title, body, size, colors);
     NotifyVia::System
+}
+
+#[cfg(test)]
+mod tests {
+    use std::cell::Cell;
+
+    use super::{Presenter, present_with_fallback};
+    use crate::api::NotifyVia;
+    use crate::notify::popup::{Colors, Size};
+
+    struct CountingPresenter {
+        calls: Cell<usize>,
+        result: bool,
+    }
+
+    impl Presenter for CountingPresenter {
+        fn present(&self, _: &str, _: &str, _: Size, _: Colors) -> bool {
+            self.calls.set(self.calls.get() + 1);
+            self.result
+        }
+    }
+
+    #[test]
+    fn confirmed_popup_skips_system_notification() {
+        let popup = CountingPresenter {
+            calls: Cell::new(0),
+            result: true,
+        };
+        let system = CountingPresenter {
+            calls: Cell::new(0),
+            result: true,
+        };
+        let via = present_with_fallback(
+            &popup,
+            &system,
+            "标题",
+            "正文",
+            Size::DEFAULT,
+            Colors::DEFAULT,
+        );
+        assert_eq!(via, NotifyVia::Popup);
+        assert_eq!(system.calls.get(), 0);
+    }
+
+    #[test]
+    fn unconfirmed_popup_triggers_one_system_notification() {
+        let popup = CountingPresenter {
+            calls: Cell::new(0),
+            result: false,
+        };
+        let system = CountingPresenter {
+            calls: Cell::new(0),
+            result: true,
+        };
+        let via = present_with_fallback(
+            &popup,
+            &system,
+            "标题",
+            "正文",
+            Size::DEFAULT,
+            Colors::DEFAULT,
+        );
+        assert_eq!(via, NotifyVia::System);
+        assert_eq!(popup.calls.get(), 1);
+        assert_eq!(system.calls.get(), 1);
+    }
 }

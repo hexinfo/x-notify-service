@@ -65,7 +65,7 @@ pub enum Command {
         #[arg(short = 't', long = "title")]
         title: String,
 
-        /// 正文(可选;支持 HTML 子集:加粗/颜色/字号/br)
+        /// 正文(可选;支持 Markdown)
         #[arg(short = 'b', long = "body")]
         body: Option<String>,
 

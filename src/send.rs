@@ -16,7 +16,7 @@ pub fn run(cfg: &Config, req: &crate::api::NotifyRequest, fallback: bool) {
         std::process::exit(2);
     }
     let title = req.title.trim().to_string();
-    let body_html = req.body.clone().unwrap_or_default();
+    let body_markdown = req.body.clone().unwrap_or_default();
     // 弹窗尺寸解析:CLI 参数 > 默认(与服务端同口径;范围已随 req.validate 校验)
     let size = notify::popup::resolve_size(req.width, req.height);
     let colors = notify::popup::resolve_colors(
@@ -34,17 +34,13 @@ pub fn run(cfg: &Config, req: &crate::api::NotifyRequest, fallback: bool) {
             Some(crate::ctl::Probe::Ours { .. })
         )
     {
-        deliver_via_service(rec.port, &title, &body_html, req);
+        deliver_via_service(rec.port, &title, &body_markdown, req);
         return;
     }
 
-    let gui_ok = !fallback
-        && !cfg.no_popup
-        && notify::popup::gui_probe()
-        && crate::screen::work_area().is_some();
-    if !gui_ok {
+    if fallback || cfg.no_popup {
         let presenter = notify::fallback::SystemPresenter::new(cfg);
-        if presenter.present(&title, &body_html, size, colors) {
+        if presenter.present(&title, &body_markdown, size, colors) {
             println!("已发送系统通知(via=system)");
         } else {
             eprintln!("系统通知发送失败(详见日志)");
@@ -55,15 +51,30 @@ pub fn run(cfg: &Config, req: &crate::api::NotifyRequest, fallback: bool) {
 
     println!("弹窗已显示(无运行中服务,本进程驻留至点击关闭)");
     // 单发模式:daemon 预置本条通知,弹窗关闭后事件循环退出、进程结束
-    if let Err(e) = notify::app::run_single(title, body_html, size, colors) {
-        eprintln!("事件循环异常: {e}");
-        std::process::exit(1);
+    let payload = notify::view::PopupPayload {
+        title: title.clone(),
+        body_markdown: body_markdown.clone(),
+        size,
+        colors,
+        quit_on_close: true,
+    };
+    if let Err(e) = notify::app::run_single(payload) {
+        eprintln!("GPUI 弹窗不可用,降级系统通知: {e}");
+        let presenter = notify::fallback::SystemPresenter::new(cfg);
+        if !presenter.present(&title, &body_markdown, size, colors) {
+            std::process::exit(1);
+        }
     }
 }
 
 /// 经运行中服务的 /notify 投递(与浏览器/SDK 完全同路径)
-fn deliver_via_service(port: u16, title: &str, body_html: &str, req: &crate::api::NotifyRequest) {
-    let mut payload = serde_json::json!({ "title": title, "body": body_html });
+fn deliver_via_service(
+    port: u16,
+    title: &str,
+    body_markdown: &str,
+    req: &crate::api::NotifyRequest,
+) {
+    let mut payload = serde_json::json!({ "title": title, "body": body_markdown });
     if let Some(w) = req.width {
         payload["width"] = w.into();
     }
