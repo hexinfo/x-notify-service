@@ -1,6 +1,6 @@
 {
   "name": "@hexinfo/x-notify-service-sdk",
-  "version": "3.0.0",
+  "version": "3.2.0",
   "description": "x-notify-service 业务页面接入 SDK(纯 ESM)",
   "type": "module",
   "module": "./dist/x-notify-service-sdk.js",
