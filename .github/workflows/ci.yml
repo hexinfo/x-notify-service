@@ -41,7 +41,10 @@ jobs:
           path: /var/cache/apt/archives
           key: ${{ steps.week.outputs.key }}-${{ hashFiles('.github/workflows/ci.yml') }}
           restore-keys: ${{ steps.week.outputs.key }}-
-      - run: sudo apt-get update -qq && sudo apt-get install -y -qq libfontconfig1-dev pkg-config dbus python3-dbus python3-gi
+      - run: >-
+          sudo apt-get update -qq && sudo apt-get install -y -qq
+          libfontconfig1-dev libxcb1-dev libxkbcommon-dev libxkbcommon-x11-dev
+          pkg-config dbus python3-dbus python3-gi
       # 最严格 clippy:lint 级别在 Cargo.toml [lints] 全 deny,这里再 -D warnings 兜底残留 rustc 告警
       - run: rustup component add clippy
       - run: cargo clippy --all-targets -- -D warnings
