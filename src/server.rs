@@ -69,11 +69,13 @@ fn request_origin(req: &Request) -> Option<String> {
         .map(|h| h.value.as_str().to_string())
 }
 
-/// 内嵌静态内容(演示页与 SDK,公开只读,无鉴权)
+/// 内嵌静态内容(演示页与 SDK,公开只读,无鉴权)。
+// no-store:升级服务后浏览器立刻拿到新页面/新 SDK,杜绝旧缓存的静默行为差
 fn serve_static(req: Request, cors: Vec<Header>, content_type: &str, body: &str) {
     let mut response = Response::from_string(body)
         .with_status_code(200)
-        .with_header(header("Content-Type", content_type));
+        .with_header(header("Content-Type", content_type))
+        .with_header(header("Cache-Control", "no-store"));
     for h in cors {
         response = response.with_header(h);
     }
