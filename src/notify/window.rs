@@ -284,6 +284,14 @@ fn sync_windows(
 }
 
 #[cfg(target_os = "macos")]
+fn popup_style_mask() -> objc2_app_kit::NSWindowStyleMask {
+    use objc2_app_kit::NSWindowStyleMask;
+
+    // Borderless 的位值为 0；保留 NonactivatingPanel 以避免弹窗抢焦点。
+    NSWindowStyleMask::Borderless | NSWindowStyleMask::NonactivatingPanel
+}
+
+#[cfg(target_os = "macos")]
 #[allow(unsafe_code)]
 fn sync_macos(
     native_view: std::ptr::NonNull<std::ffi::c_void>,
@@ -320,6 +328,10 @@ fn sync_macos(
         if let Some(main_thread) = MainThreadMarker::new()
             && let Some(window) = view.get(main_thread).window()
         {
+            let style = popup_style_mask();
+            if window.styleMask() != style {
+                window.setStyleMask(style);
+            }
             window.setFrameOrigin(NSPoint::new(origin.0, origin.1));
         }
     });
@@ -355,12 +367,26 @@ fn sync_x11(xid: u32, x: i32, y: i32, width: u32, height: u32) -> Result<(), Win
 
 #[cfg(test)]
 mod tests {
+    #[cfg(target_os = "macos")]
+    use super::popup_style_mask;
     #[cfg(target_os = "linux")]
     use super::{BackendKind, backend_kind_from_env};
     use super::{popup_bounds, sync_geometry, work_area_with_layer_shell};
     use crate::{notify::popup::Size, screen::WorkArea};
     use gpui_kit::{AppContext as _, EmptyView, TestAppContext, px, size};
     use std::cell::Cell;
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn mac_popup_style_is_borderless_and_nonactivating() {
+        use objc2_app_kit::NSWindowStyleMask;
+
+        let mask = popup_style_mask();
+        assert_eq!(
+            (mask.bits(), mask.contains(NSWindowStyleMask::Titled)),
+            (NSWindowStyleMask::NonactivatingPanel.bits(), false)
+        );
+    }
 
     #[test]
     fn wayland_area_needs_no_x11_work_area() {

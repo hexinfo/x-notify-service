@@ -264,7 +264,7 @@ Add `raw-window-handle = "0.6"`, required Win32 features, and retain objc2/x11rb
 - [ ] **Step 4: Implement runtime geometry sync**
 
 - Windows: raw HWND + `SetWindowPos(HWND_TOPMOST, x, y, w, h, SWP_NOACTIVATE | SWP_SHOWWINDOW)`.
-- macOS: raw AppKit view → NSWindow frame using existing coordinate conversion.
+- macOS: raw AppKit view → Borderless + Nonactivating NSPanel and async frame origin using existing coordinate conversion; no native rounded corners.
 - X11: raw XID + one x11rb `configure_window`; never search by title.
 - Wayland: `window.resize`; layer anchors preserve placement.
 
