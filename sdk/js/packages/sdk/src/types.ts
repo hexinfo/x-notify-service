@@ -17,9 +17,9 @@ export interface NotifyOptions {
   readonly title: string
   /** 通知正文(最长 2000 字符);支持 HTML 子集:<b>/<strong> 加粗、<font color>/<span style="color:"> 颜色、<font size>/font-size 字号(11-18,按行生效)、<br> 换行、HTML 实体;其余标签自动剥除。弹窗常驻不超时,点击关闭或被新通知顶掉 */
   readonly body?: string
-  /** 弹窗宽度(逻辑像素,220-800);缺省用服务端 config.toml 的 popup_width,再缺省 327 */
+  /** 弹窗宽度(逻辑像素,220-800);缺省 327 */
   readonly width?: number
-  /** 弹窗高度(逻辑像素,80-600);缺省用服务端 config.toml 的 popup_height,再缺省 106 */
+  /** 弹窗高度(逻辑像素,80-600);缺省 106 */
   readonly height?: number
 }
 

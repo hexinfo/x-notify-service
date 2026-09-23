@@ -52,7 +52,7 @@ pub enum Message {
         title: String,
         body_html: String,
         quit_on_close: bool,
-        /// 本条通知的弹窗尺寸(请求/配置/默认解析后的生效值)
+        /// 本条通知的弹窗尺寸(请求/默认解析后的生效值)
         size: popup::Size,
     },
     /// 请求关闭弹窗(点击窗口任意处/关闭钮/HTTP /close/系统关闭请求)

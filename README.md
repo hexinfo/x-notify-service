@@ -45,7 +45,7 @@ POST /notify → {"ok":true,"via":"popup"|"system"}   body: {"title":"≤200字"
 POST /close  → {"ok":true}
 ```
 
-正文 HTML 子集:`<b>`、颜色、字号(11~18,按行)、`<br>`、实体;其余剥除,超行数截断加 …(默认弹窗 327×106 容两行)。弹窗常驻不超时,新通知顶掉旧的(不堆叠);尺寸优先级:请求 `width`/`height` > `config.toml` 的 `popup_width`/`popup_height` > 默认。
+正文 HTML 子集:`<b>`、颜色、字号(11~18,按行)、`<br>`、实体;其余剥除,超行数截断加 …。弹窗常驻不超时,新通知顶掉旧的(不堆叠);尺寸缺省 327×106,请求 `width`/`height` 可覆盖。
 
 ## JSSDK
 

@@ -43,11 +43,11 @@ impl Presenter for PopupPresenter {
 }
 
 /// 投递一条通知:弹窗为主,失败自动降级系统通知兜底。
-/// 弹窗尺寸逐轴解析:/notify 请求 > config.toml > 默认
+/// 弹窗尺寸逐轴解析:/notify 请求 > 默认
 pub fn dispatch(cfg: &Config, req: &NotifyRequest) -> NotifyVia {
     let title = req.title.trim();
     let body = req.body.as_deref().unwrap_or("");
-    let size = popup::resolve_size(req.width, req.height, cfg.popup_width, cfg.popup_height);
+    let size = popup::resolve_size(req.width, req.height);
     if PopupPresenter.present(title, body, size) {
         return NotifyVia::Popup;
     }

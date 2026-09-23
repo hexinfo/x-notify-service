@@ -69,11 +69,11 @@ pub enum Command {
         #[arg(short = 'b', long = "body")]
         body: Option<String>,
 
-        /// 弹窗宽度(逻辑像素,220-800;缺省走 config.toml 与默认)
+        /// 弹窗宽度(逻辑像素,220-800;缺省 327)
         #[arg(long)]
         width: Option<u16>,
 
-        /// 弹窗高度(逻辑像素,80-600;缺省走 config.toml 与默认)
+        /// 弹窗高度(逻辑像素,80-600;缺省 106)
         #[arg(long)]
         height: Option<u16>,
 
@@ -101,9 +101,6 @@ pub struct Config {
     /// Windows 兜底通知的 AppId(仅 Windows 读取)
     #[cfg_attr(not(windows), allow(dead_code))]
     pub app_id: Option<String>,
-    /// 弹窗默认尺寸(逻辑像素):/notify 未携带 width/height 时生效;越界由弹窗层钳制
-    pub popup_width: Option<u16>,
-    pub popup_height: Option<u16>,
 }
 
 #[derive(Debug, Default, serde::Deserialize)]
@@ -116,8 +113,6 @@ struct FileConfig {
     cors_origins: Option<Vec<String>>,
     allow_private_network: Option<bool>,
     token: Option<String>,
-    popup_width: Option<u16>,
-    popup_height: Option<u16>,
 }
 
 /// 平台标准日志目录
@@ -171,8 +166,6 @@ pub fn resolve(cli: &Cli) -> Config {
         allow_private_network: file.allow_private_network.unwrap_or(true),
         token: file.token.filter(|t| !t.is_empty()),
         app_id: cli.app_id.clone().or(file.app_id),
-        popup_width: file.popup_width,
-        popup_height: file.popup_height,
     }
 }
 

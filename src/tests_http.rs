@@ -27,8 +27,6 @@ fn start_server(cfg_override: impl FnOnce(&mut Config)) -> u16 {
         allow_private_network: true,
         token: None,
         app_id: None,
-        popup_width: None,
-        popup_height: None,
     };
     cfg_override(&mut cfg);
     crate::server::start(cfg)

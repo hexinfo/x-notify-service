@@ -1,7 +1,7 @@
 //! 弹窗几何、窗口设置与 GUI 探测(纯逻辑,iced 程序体在 `app.rs`)。
 
 /// 弹窗逻辑尺寸(方角白卡,不依赖窗口透明)。
-/// 生效优先级:/notify 请求字段 > config.toml(`popup_width`/`popup_height`) > `Size::DEFAULT`
+/// 生效优先级:/notify 请求字段 > `Size::DEFAULT`
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Size {
     pub width: f64,
@@ -16,7 +16,7 @@ impl Size {
     };
 }
 
-/// 尺寸取值范围(逻辑像素):请求越界由 API 层 422 拒绝,配置越界钳到边界
+/// 尺寸取值范围(逻辑像素):请求越界由 API 层 422 拒绝
 pub const MIN_W: u16 = 220;
 pub const MAX_W: u16 = 800;
 pub const MIN_H: u16 = 80;
@@ -55,50 +55,12 @@ pub const fn should_retry_x11_init(delay_ms: u64) -> bool {
     delay_ms == 50
 }
 
-/// 逐轴取生效尺寸:请求值(API 层已校验范围)> 配置值(越界钳到边界并告警)> 默认值。
-/// 宽高独立,允许只传其一
-pub fn resolve_size(
-    req_width: Option<u16>,
-    req_height: Option<u16>,
-    cfg_width: Option<u16>,
-    cfg_height: Option<u16>,
-) -> Size {
+/// 逐轴取生效尺寸:请求值(API/CLI 层已校验范围)> 默认值。宽高独立,允许只传其一
+pub fn resolve_size(req_width: Option<u16>, req_height: Option<u16>) -> Size {
     Size {
-        width: pick_axis(
-            req_width,
-            cfg_width,
-            (MIN_W, MAX_W),
-            Size::DEFAULT.width,
-            "popup_width",
-        ),
-        height: pick_axis(
-            req_height,
-            cfg_height,
-            (MIN_H, MAX_H),
-            Size::DEFAULT.height,
-            "popup_height",
-        ),
+        width: req_width.map_or(Size::DEFAULT.width, f64::from),
+        height: req_height.map_or(Size::DEFAULT.height, f64::from),
     }
-}
-
-fn pick_axis(
-    req: Option<u16>,
-    cfg: Option<u16>,
-    (min, max): (u16, u16),
-    default: f64,
-    name: &str,
-) -> f64 {
-    if let Some(v) = req {
-        return f64::from(v);
-    }
-    if let Some(v) = cfg {
-        if !(min..=max).contains(&v) {
-            log::warn!("配置项 {name}={v} 越界([{min},{max}]),已按边界生效");
-            return f64::from(v.clamp(min, max));
-        }
-        return f64::from(v);
-    }
-    default
 }
 
 /// 由窗口尺寸推导正文排版限制:每行估宽容量(14px 基准)与最大行数。
@@ -281,22 +243,16 @@ mod tests {
 
     #[test]
     fn size_resolution_priority() {
-        let near = |a: f64, b: f64| (a - b).abs() < 1e-9;
         let d = Size::DEFAULT;
-        // 请求 > 配置 > 默认(逐轴独立)
+        // 请求 > 默认(逐轴独立)
         assert_eq!(
-            resolve_size(Some(400), None, Some(500), Some(120)),
+            resolve_size(Some(400), None),
             Size {
                 width: 400.0,
-                height: 120.0,
+                height: d.height,
             }
         );
-        assert!(near(resolve_size(None, None, Some(500), None).width, 500.0));
-        assert_eq!(resolve_size(None, None, None, None), d);
-        // 配置越界:钳到边界
-        let clamped = resolve_size(None, None, Some(10), Some(9999));
-        assert!(near(clamped.width, f64::from(MIN_W)));
-        assert!(near(clamped.height, f64::from(MAX_H)));
+        assert_eq!(resolve_size(None, None), d);
         // 默认自身必须在范围内
         assert!((f64::from(MIN_W)..=f64::from(MAX_W)).contains(&d.width));
         assert!((f64::from(MIN_H)..=f64::from(MAX_H)).contains(&d.height));

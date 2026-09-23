@@ -30,8 +30,8 @@ pub fn run(
     }
     let title = req.title.trim().to_string();
     let body_html = req.body.unwrap_or_default();
-    // 弹窗尺寸三级解析:CLI 参数 > config.toml > 默认(与服务端同口径)
-    let size = notify::popup::resolve_size(width, height, cfg.popup_width, cfg.popup_height);
+    // 弹窗尺寸解析:CLI 参数 > 默认(与服务端同口径;范围已随 req.validate 校验)
+    let size = notify::popup::resolve_size(width, height);
 
     // 服务在运行:走 HTTP 通道(弹窗归服务持有,CLI 立即返回)
     if !fallback

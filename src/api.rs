@@ -13,9 +13,9 @@ pub const BODY_MAX: usize = 2000;
 pub struct NotifyRequest {
     pub title: String,
     pub body: Option<String>,
-    /// 弹窗宽度(逻辑像素;缺省走服务端配置与内置默认)
+    /// 弹窗宽度(逻辑像素;缺省用内置默认)
     pub width: Option<u16>,
-    /// 弹窗高度(逻辑像素;缺省走服务端配置与内置默认)
+    /// 弹窗高度(逻辑像素;缺省用内置默认)
     pub height: Option<u16>,
 }
 

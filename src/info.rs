@@ -67,7 +67,7 @@ fn display(cfg: &config::Config) {
         return;
     }
     println!("GUI 探测: 可用(弹窗窗口可创建)");
-    let size = notify::popup::resolve_size(None, None, cfg.popup_width, cfg.popup_height);
+    let size = notify::popup::resolve_size(None, None);
     match screen::work_area() {
         Some(area) => {
             let (x, y) = notify::popup::landing(&area, size);
