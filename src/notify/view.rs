@@ -2,10 +2,10 @@
 
 #[cfg(test)]
 mod tests {
-    use super::{CloseRequested, PopupPayload, PopupView, image_alt_node};
+    use super::{CloseRequested, PopupPayload, PopupView, image_alt_node, popup_border_color};
     use crate::notify::popup::{Colors, Size};
     use gpui_kit::test::TestWindowExt as _;
-    use gpui_kit::{AppContext as _, TestAppContext, point, px, size};
+    use gpui_kit::{AppContext as _, TestAppContext, point, px, rgb, size};
     use std::{cell::Cell, rc::Rc};
 
     fn payload(body_markdown: &str) -> PopupPayload {
@@ -16,6 +16,11 @@ mod tests {
             colors: Colors::DEFAULT,
             quit_on_close: false,
         }
+    }
+
+    #[test]
+    fn popup_border_is_opaque_black() {
+        assert_eq!(popup_border_color(), rgb(0).into());
     }
 
     #[gpui_kit::test]
@@ -257,6 +262,10 @@ const UI_FONT: &str = "Microsoft YaHei UI";
 #[cfg(target_os = "linux")]
 const UI_FONT: &str = "Noto Sans CJK SC";
 
+fn popup_border_color() -> Hsla {
+    rgb(0).into()
+}
+
 impl Render for PopupView {
     #[allow(clippy::too_many_lines, clippy::cast_possible_truncation)]
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
@@ -365,7 +374,7 @@ impl Render for PopupView {
             .h(px(self.payload.size.height as f32))
             .overflow_hidden()
             .border_1()
-            .border_color(body_text.opacity(0.2))
+            .border_color(popup_border_color())
             .on_click(cx.listener(|_, _, _, cx| cx.emit(CloseRequested)))
             .child(content)
     }
