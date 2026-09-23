@@ -18,8 +18,11 @@ use crate::notify::popup;
 
 const TITLE_COLOR: Color = Color::from_rgb8(0x1f, 0x23, 0x29);
 const BODY_COLOR: Color = Color::from_rgb8(0x5f, 0x66, 0x72);
-const CLOSE_GLYPH: Color = Color::from_rgb8(0x9a, 0xa2, 0xad);
-const CLOSE_HOVER_BG: Color = Color::from_rgb8(0xee, 0xf0, 0xf3);
+/// 关闭钮 × 静止色:与正文同灰阶,白底上清晰可读
+const CLOSE_GLYPH: Color = Color::from_rgb8(0x5f, 0x66, 0x72);
+/// 关闭钮 × 悬停色:加深到标题黑
+const CLOSE_GLYPH_HOVER: Color = Color::from_rgb8(0x1f, 0x23, 0x29);
+const CLOSE_HOVER_BG: Color = Color::from_rgb8(0xe4, 0xe6, 0xeb);
 /// 白底方角卡片黑色描边:紧凑尺寸下靠深色边界与桌面分离
 const CARD_BORDER: Color = Color::BLACK;
 
@@ -280,6 +283,8 @@ fn subscription(_state: &State) -> Subscription<Message> {
 }
 
 fn view(state: &State, _window: window::Id) -> Element<'_, Message> {
+    // 滑入偏移并入左内边距:入场动画期间只有内容自右向左就位,
+    // 卡片与描边落定不动——避免"白底矩形先现、带框卡片再拉过去"的观感
     let card = container(
         Column::with_capacity(2)
             .push(title_row(state))
@@ -289,30 +294,15 @@ fn view(state: &State, _window: window::Id) -> Element<'_, Message> {
     .padding(Padding {
         top: popup::PAD_TOP,
         bottom: popup::PAD_BOTTOM,
-        left: popup::PAD_LEFT,
+        left: popup::PAD_LEFT + state.slide,
         right: popup::PAD_RIGHT,
     })
     .width(Length::Fill)
     .height(Length::Fill)
     .style(|_theme| card_style());
 
-    // 滑入偏移:入场动画期间卡片自右向左就位(以左内边距驱动)
-    let sliding = container(card)
-        .padding(Padding {
-            top: 0.0,
-            bottom: 0.0,
-            left: state.slide,
-            right: 0.0,
-        })
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .style(|_theme| ContainerStyle {
-            background: Some(Color::WHITE.into()),
-            ..ContainerStyle::default()
-        });
-
     // 整窗点击关闭(与关闭钮同为 Close,重复消息幂等)
-    mouse_area(sliding).on_press(Message::Close).into()
+    mouse_area(card).on_press(Message::Close).into()
 }
 
 /// 白底方角卡片描边
@@ -344,9 +334,14 @@ fn title_row(state: &State) -> Element<'_, Message> {
     .into()
 }
 
-/// 关闭钮:20×20 圆形 hover 底色,字形垂直水平居中
+/// 关闭钮:20×20 圆形 hover 底色,字形随 hover 加深,垂直水平居中
 fn close_button(hover: bool) -> Element<'static, Message> {
-    let circle = container(text("×").size(16.0).font(UI_FONT).color(CLOSE_GLYPH))
+    let glyph = if hover {
+        CLOSE_GLYPH_HOVER
+    } else {
+        CLOSE_GLYPH
+    };
+    let circle = container(text("×").size(16.0).font(UI_FONT).color(glyph))
         .width(20.0)
         .height(20.0)
         // iced Container 默认 Left/Top 对齐,必须显式居中
