@@ -39,8 +39,18 @@ $('btn-launch').addEventListener('click', () => {
 function send(): void {
   const title = ($('inp-title') as HTMLInputElement).value
   const body = ($('inp-body') as HTMLInputElement).value
+  // 宽高可选:留空不传字段(走服务端配置与默认)
+  const opts: { title: string; body: string; width?: number; height?: number } = { title, body }
+  const width = ($('inp-width') as HTMLInputElement).value.trim()
+  const height = ($('inp-height') as HTMLInputElement).value.trim()
+  if (width !== '') {
+    opts.width = Number(width)
+  }
+  if (height !== '') {
+    opts.height = Number(height)
+  }
   bridge
-    .notify({ title, body })
+    .notify(opts)
     .then((result) =>
       log(result.ok ? `发送成功: via=${result.via}` : '未送达(服务未运行,静默失败)'),
     )

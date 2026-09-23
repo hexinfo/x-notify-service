@@ -67,9 +67,11 @@ fn main() {
         Some(config::Command::Notify {
             title,
             body,
+            width,
+            height,
             fallback,
         }) => {
-            send::run(&cfg, title, body, fallback);
+            send::run(&cfg, title, body, width, height, fallback);
         }
         Some(config::Command::Close) => send::close(),
     }

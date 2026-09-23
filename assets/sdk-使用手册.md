@@ -59,6 +59,9 @@ await svc.start()
 const result = await svc.notify({
   title: '工单提醒',
   body: '<b>加粗</b> <font color="#d93025">红色</font><br>第二行',
+  // 弹窗尺寸可选(逻辑像素):缺省用服务端 config.toml,再缺省 327×106
+  width: 400,
+  height: 140,
 })
 // result: { ok: true, via: 'popup' | 'system' }
 ```
@@ -82,7 +85,7 @@ const result = await svc.notify({
 |---|---|---|
 | discover(force?) | `Promise<string \| null>` | 探测服务，返回 baseUrl（如 `http://127.0.0.1:17321`）；带缓存，force 强制重探 |
 | start(timeoutMs?) | `Promise<boolean>` | 提前拉起服务（经 `x-notify://` 协议），避免通知时刻才冷启动；幂等，未安装/超时静默返回 false |
-| notify(opts) | `Promise<{ ok, via? }>` | 发送通知。title 必填（≤200 字符），body 可选（≤2000 字符） |
+| notify(opts) | `Promise<{ ok, via? }>` | 发送通知。title 必填（≤200 字符），body 可选（≤2000 字符），width/height 可选（220-800 / 80-600 逻辑像素，缺省走服务端配置与默认 327×106） |
 | close() | `Promise<void>` | 显式关闭当前弹窗（幂等） |
 | destroy() | void | 清空已缓存的 baseUrl |
 
@@ -101,7 +104,7 @@ body 只支持以下标记，其余标签一律剥除保留内文：
 - 换行：`<br>`
 - HTML 实体：`&amp;` `&lt;` `&gt;` `&quot;` `&nbsp;` `&#65;` `&#x41;`
 
-排版：最多 5 行，超出截断加 `…`；行首标点禁则。弹窗常驻不超时，点击关闭或被新通知顶掉（不堆叠）。
+排版：行数随弹窗高度而定（默认 327×106 容两行，上限 5 行），超出截断加 `…`；行首标点禁则。弹窗常驻不超时，点击关闭或被新通知顶掉（不堆叠）。
 系统通知兜底渠道（via=system）自动剥除全部标记为纯文本。
 
 ## 6. 行为与限制

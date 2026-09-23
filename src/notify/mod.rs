@@ -12,10 +12,11 @@ use crate::config::Config;
 /// 弹窗 GUI 是否可用(启动时探测,失败则全程走系统通知兜底)
 pub static POPUP_AVAILABLE: AtomicBool = AtomicBool::new(false);
 
-/// 通知展示渠道:实现方负责把一条通知真正呈现给用户
+/// 通知展示渠道:实现方负责把一条通知真正呈现给用户。
+/// `size` 为解析后的弹窗尺寸,仅弹窗渠道消费
 pub trait Presenter {
     /// 展示通知;返回 false 表示本渠道投递失败(调用方降级到下一渠道)
-    fn present(&self, title: &str, body_html: &str) -> bool;
+    fn present(&self, title: &str, body_html: &str, size: popup::Size) -> bool;
 }
 
 /// 右下角置顶弹窗(主渠道):经 bridge 通道投递给 iced 事件循环。
@@ -24,7 +25,7 @@ pub trait Presenter {
 pub struct PopupPresenter;
 
 impl Presenter for PopupPresenter {
-    fn present(&self, title: &str, body_html: &str) -> bool {
+    fn present(&self, title: &str, body_html: &str, size: popup::Size) -> bool {
         if !POPUP_AVAILABLE.load(Ordering::Relaxed) {
             return false;
         }
@@ -32,6 +33,7 @@ impl Presenter for PopupPresenter {
             title: title.to_owned(),
             body_html: body_html.to_owned(),
             quit_on_close: false,
+            size,
         });
         if !posted {
             log::warn!("弹窗投递失败,降级系统通知");
@@ -41,12 +43,14 @@ impl Presenter for PopupPresenter {
 }
 
 /// 投递一条通知:弹窗为主,失败自动降级系统通知兜底。
+/// 弹窗尺寸逐轴解析:/notify 请求 > config.toml > 默认
 pub fn dispatch(cfg: &Config, req: &NotifyRequest) -> NotifyVia {
     let title = req.title.trim();
     let body = req.body.as_deref().unwrap_or("");
-    if PopupPresenter.present(title, body) {
+    let size = popup::resolve_size(req.width, req.height, cfg.popup_width, cfg.popup_height);
+    if PopupPresenter.present(title, body, size) {
         return NotifyVia::Popup;
     }
-    fallback::SystemPresenter::new(cfg).present(title, body);
+    fallback::SystemPresenter::new(cfg).present(title, body, size);
     NotifyVia::System
 }

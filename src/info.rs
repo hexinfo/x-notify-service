@@ -67,12 +67,13 @@ fn display(cfg: &config::Config) {
         return;
     }
     println!("GUI 探测: 可用(弹窗窗口可创建)");
+    let size = notify::popup::resolve_size(None, None, cfg.popup_width, cfg.popup_height);
     match screen::work_area() {
         Some(area) => {
-            let (x, y) = notify::popup::landing(&area);
+            let (x, y) = notify::popup::landing(&area, size);
             println!(
-                "工作区:   ({},{},{}×{}) scale={} → 弹窗落点 ({x},{y})",
-                area.x, area.y, area.w, area.h, area.scale
+                "工作区:   ({},{},{}×{}) scale={} → 弹窗落点 ({x},{y}),尺寸 {}×{}",
+                area.x, area.y, area.w, area.h, area.scale, size.width, size.height
             );
         }
         None => println!("工作区:   无法获取(Wayland 会话或无可用 X 屏幕)"),

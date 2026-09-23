@@ -8,12 +8,10 @@
 use std::time::{Duration, Instant};
 
 use iced::font::{Family, Weight};
-use iced::widget::text::Span;
-use iced::widget::{container, mouse_area, rich_text, row, span, text, Column};
 use iced::widget::container::Style as ContainerStyle;
-use iced::{
-    daemon, window, Color, Element, Font, Length, Padding, Subscription, Task, Theme,
-};
+use iced::widget::text::Span;
+use iced::widget::{Column, container, mouse_area, rich_text, row, span, text};
+use iced::{Color, Element, Font, Length, Padding, Subscription, Task, Theme, daemon, window};
 
 use crate::html;
 use crate::notify::popup;
@@ -22,7 +20,8 @@ const TITLE_COLOR: Color = Color::from_rgb8(0x1f, 0x23, 0x29);
 const BODY_COLOR: Color = Color::from_rgb8(0x5f, 0x66, 0x72);
 const CLOSE_GLYPH: Color = Color::from_rgb8(0x9a, 0xa2, 0xad);
 const CLOSE_HOVER_BG: Color = Color::from_rgb8(0xee, 0xf0, 0xf3);
-const CARD_BORDER: Color = Color::from_rgb8(0xe4, 0xe6, 0xeb);
+/// 白底方角卡片黑色描边:紧凑尺寸下靠深色边界与桌面分离
+const CARD_BORDER: Color = Color::BLACK;
 
 /// 平台标准 UI 字体族:钉死族名让 CJK 与拉丁同族——iced 默认 SansSerif
 /// 解析为 "Open Sans"(各平台普遍缺失),按脚本回退后拉丁落到 Helvetica 系,
@@ -53,6 +52,8 @@ pub enum Message {
         title: String,
         body_html: String,
         quit_on_close: bool,
+        /// 本条通知的弹窗尺寸(请求/配置/默认解析后的生效值)
+        size: popup::Size,
     },
     /// 请求关闭弹窗(点击窗口任意处/关闭钮/HTTP /close/系统关闭请求)
     Close,
@@ -78,6 +79,8 @@ struct State {
     /// 弹窗关闭后退出事件循环(仅单发进程;服务模式恒 false)
     quit_on_close: bool,
     area: crate::screen::WorkArea,
+    /// 当前弹窗尺寸(随每条通知更新,复用窗口时据此 resize)
+    size: popup::Size,
     /// 当前滑入剩余偏移(px),0 表示就位
     slide: f32,
     hover_close: bool,
@@ -97,6 +100,7 @@ impl State {
                 h: 0.0,
                 scale: 1.0,
             },
+            size: popup::Size::DEFAULT,
             slide: popup::SLIDE_PX,
             hover_close: false,
         }
@@ -109,7 +113,7 @@ pub fn run_service() -> iced::Result {
 }
 
 /// 单发模式(notify 子命令):boot 即注入一条通知,弹窗关闭后退出
-pub fn run_single(title: String, body_html: String) -> iced::Result {
+pub fn run_single(title: String, body_html: String, size: popup::Size) -> iced::Result {
     build_daemon(move || {
         (
             State::new(),
@@ -117,6 +121,7 @@ pub fn run_single(title: String, body_html: String) -> iced::Result {
                 title: title.clone(),
                 body_html: body_html.clone(),
                 quit_on_close: true,
+                size,
             }),
         )
     })
@@ -146,7 +151,8 @@ fn update(state: &mut State, message: Message) -> Task<Message> {
             title,
             body_html,
             quit_on_close,
-        } => notify(state, title, &body_html, quit_on_close),
+            size,
+        } => notify(state, title, &body_html, quit_on_close, size),
         Message::Opened(_id) => {
             // 原生窗口已映射:补设 X11 属性(窗口类型/状态/图标);
             // 置顶再走一次 ClientMessage(映射前发送会被 WM 丢弃,EWMH 语义)
@@ -190,10 +196,9 @@ fn update(state: &mut State, message: Message) -> Task<Message> {
             window::position(id).map(Message::FixupPosition)
         }
         Message::FixupPosition(current) => {
-            let expected = popup::logical_landing(&state.area);
+            let expected = popup::logical_landing(&state.area, state.size);
             if let Some(pos) = current {
-                let drifted =
-                    (pos.x - expected.x).abs() > 2.0 || (pos.y - expected.y).abs() > 2.0;
+                let drifted = (pos.x - expected.x).abs() > 2.0 || (pos.y - expected.y).abs() > 2.0;
                 if drifted {
                     log::warn!("WM 重摆了弹窗(现 {pos:?}),复校回 {expected:?}");
                 }
@@ -219,8 +224,14 @@ fn update(state: &mut State, message: Message) -> Task<Message> {
     }
 }
 
-/// 新通知:更新内容;窗口在则复用(重校位置/置顶),不在则创建期定位开窗
-fn notify(state: &mut State, title: String, body_html: &str, quit_on_close: bool) -> Task<Message> {
+/// 新通知:更新内容与尺寸;窗口在则复用(重摆尺寸/位置/置顶),不在则创建期定位开窗
+fn notify(
+    state: &mut State,
+    title: String,
+    body_html: &str,
+    quit_on_close: bool,
+    size: popup::Size,
+) -> Task<Message> {
     let Some(area) = crate::screen::work_area() else {
         log::warn!("无法获取屏幕工作区,本条通知走系统通知");
         crate::notify::fallback::show_raw(&title, &html::to_plain_text(body_html));
@@ -229,24 +240,31 @@ fn notify(state: &mut State, title: String, body_html: &str, quit_on_close: bool
     state.area = area;
     state.quit_on_close = quit_on_close;
     state.title = title;
-    state.body = html::to_lines(&html::parse(body_html));
-    let (px, py) = popup::landing(&area);
+    state.size = size;
+    state.body = html::to_lines(&html::parse(body_html, popup::body_limits(size)));
+    let (px, py) = popup::landing(&area, size);
     log::info!(
-        "弹窗定位: 工作区({},{},{}x{}) → ({px},{py})",
+        "弹窗定位: 工作区({},{},{}x{}) → ({px},{py}),尺寸 {}x{}",
         area.x,
         area.y,
         area.w,
-        area.h
+        area.h,
+        size.width,
+        size.height
     );
     if let Some(id) = state.window {
-        // 窗口复用:内容已更新,重跑一轮位置复校 + 置顶双保险
+        // 窗口复用:内容与尺寸已更新,重跑一轮 resize/位置复校/置顶(resize 幂等)
         schedule_fixups();
+        // f64→f32:窗口逻辑尺寸为整数级数值,无精度损失
+        #[allow(clippy::cast_possible_truncation)]
+        let logical = iced::Size::new(size.width as f32, size.height as f32);
         Task::batch([
-            window::move_to(id, popup::logical_landing(&state.area)),
+            window::resize(id, logical),
+            window::move_to(id, popup::logical_landing(&state.area, size)),
             window::set_level(id, window::Level::AlwaysOnTop),
         ])
     } else {
-        let (id, opened) = window::open(popup::window_settings(&area));
+        let (id, opened) = window::open(popup::window_settings(&area, size));
         state.window = Some(id);
         opened.map(Message::Opened)
     }
@@ -262,16 +280,21 @@ fn subscription(_state: &State) -> Subscription<Message> {
 }
 
 fn view(state: &State, _window: window::Id) -> Element<'_, Message> {
-    let card = container(Column::with_capacity(2).push(title_row(state)).push(body_column(state)).spacing(4.0))
-        .padding(Padding {
-            top: 16.0,
-            bottom: 16.0,
-            left: 20.0,
-            right: 12.0,
-        })
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .style(|_theme| card_style());
+    let card = container(
+        Column::with_capacity(2)
+            .push(title_row(state))
+            .push(body_column(state))
+            .spacing(popup::ROW_GAP),
+    )
+    .padding(Padding {
+        top: popup::PAD_TOP,
+        bottom: popup::PAD_BOTTOM,
+        left: popup::PAD_LEFT,
+        right: popup::PAD_RIGHT,
+    })
+    .width(Length::Fill)
+    .height(Length::Fill)
+    .style(|_theme| card_style());
 
     // 滑入偏移:入场动画期间卡片自右向左就位(以左内边距驱动)
     let sliding = container(card)
@@ -308,7 +331,7 @@ fn card_style() -> ContainerStyle {
 /// 标题行:加粗标题(单行截断)+ 关闭钮,垂直居中
 fn title_row(state: &State) -> Element<'_, Message> {
     row![
-        text(popup::elide_title(&state.title))
+        text(popup::elide_title(&state.title, state.size.width))
             .size(16.0)
             .font(BOLD)
             .color(TITLE_COLOR)
@@ -316,7 +339,7 @@ fn title_row(state: &State) -> Element<'_, Message> {
             .width(Length::Fill),
         close_button(state.hover_close),
     ]
-    .height(26.0)
+    .height(popup::TITLE_ROW_H)
     .align_y(iced::Alignment::Center)
     .into()
 }
@@ -338,7 +361,7 @@ fn close_button(hover: bool) -> Element<'static, Message> {
             ..ContainerStyle::default()
         });
 
-    let slot = container(circle).center(26.0);
+    let slot = container(circle).center(popup::TITLE_ROW_H);
 
     mouse_area(slot)
         .on_press(Message::Close)
@@ -367,7 +390,7 @@ fn body_column(state: &State) -> Element<'_, Message> {
             rich_text(spans)
                 .font(UI_FONT)
                 .size(f32::from(line.size))
-                .line_height(1.6)
+                .line_height(popup::BODY_LINE_HEIGHT)
                 // 行由 Rust 侧预折,禁二次换行:估宽偏差只裁切,不产生额外行(保住 5 行上限)
                 .wrapping(iced::widget::text::Wrapping::None)
                 .color(BODY_COLOR),
@@ -387,7 +410,9 @@ fn post_after(delay: Duration, make_message: impl FnOnce() -> Message + Send + '
 /// 显示后多档位置复校,对抗 WM 重摆
 fn schedule_fixups() {
     for delay_ms in popup::FIXUP_DELAYS_MS {
-        post_after(Duration::from_millis(delay_ms), move || Message::Fixup(delay_ms));
+        post_after(Duration::from_millis(delay_ms), move || {
+            Message::Fixup(delay_ms)
+        });
     }
 }
 
@@ -409,9 +434,9 @@ fn schedule_animation() {
 mod bridge {
     use std::sync::Mutex;
 
-    use iced::futures::channel::mpsc::{unbounded, UnboundedSender};
-    use iced::futures::Stream;
     use iced::Subscription;
+    use iced::futures::Stream;
+    use iced::futures::channel::mpsc::{UnboundedSender, unbounded};
 
     use super::Message;
 

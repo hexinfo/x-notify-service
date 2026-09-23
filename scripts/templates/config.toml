@@ -17,6 +17,11 @@
 # 禁用弹窗,强制走系统通知
 # no_popup = false
 
+# 弹窗默认尺寸(逻辑像素;调用方 /notify 携带 width/height 时优先于本配置)
+# 范围:宽 220-800 / 高 80-600;不配置则用内置默认 327×106
+# popup_width = 327
+# popup_height = 106
+
 # Windows 兜底系统通知的 AppId(默认 PowerShell,可选)
 # app_id = ""
 

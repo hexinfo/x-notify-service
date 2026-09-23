@@ -27,6 +27,8 @@
       <legend>通知</legend>
       <label>标题 <input id="inp-title" value="工单提醒" /></label>
       <label>正文(HTML 子集:加粗 / 颜色 / 字号 / br)<input id="inp-body" value="&lt;b&gt;张三&lt;/b&gt; 提交了 &lt;font color=&quot;#d93025&quot;&gt;紧急&lt;/font&gt; 归档申请,&lt;br&gt;&lt;font color=&quot;#00873a&quot;&gt;已超时 2 小时&lt;/font&gt;" /></label>
+      <label>宽度(220-800,留空用服务端配置)<input id="inp-width" inputmode="numeric" placeholder="327" /></label>
+      <label>高度(80-600,留空用服务端配置)<input id="inp-height" inputmode="numeric" placeholder="106" /></label>
       <button type="button" class="primary" id="btn-send">发送通知</button>
       <button type="button" id="btn-launch">拉起服务</button>
       <button type="button" id="btn-close">关闭弹窗</button>
@@ -54,7 +56,13 @@
       document.getElementById('btn-send').onclick = async () => {
         const title = document.getElementById('inp-title').value
         const body = document.getElementById('inp-body').value
-        const r = await svc.notify({ title, body })
+        // 宽高可选:留空不传字段(走服务端配置与默认)
+        const opts = { title, body }
+        const w = document.getElementById('inp-width').value.trim()
+        const h = document.getElementById('inp-height').value.trim()
+        if (w !== '') opts.width = Number(w)
+        if (h !== '') opts.height = Number(h)
+        const r = await svc.notify(opts)
         log(r.ok ? `发送成功: via=${r.via}` : '未送达(服务未运行,静默失败)')
       }
       document.getElementById('btn-launch').onclick = async () => {

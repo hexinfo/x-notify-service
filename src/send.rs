@@ -10,14 +10,28 @@ use crate::config::Config;
 use crate::notify;
 use crate::notify::Presenter as _;
 
-pub fn run(cfg: &Config, title: String, body: Option<String>, fallback: bool) {
-    let req = crate::api::NotifyRequest { title, body };
+pub fn run(
+    cfg: &Config,
+    title: String,
+    body: Option<String>,
+    width: Option<u16>,
+    height: Option<u16>,
+    fallback: bool,
+) {
+    let req = crate::api::NotifyRequest {
+        title,
+        body,
+        width,
+        height,
+    };
     if let Err(e) = req.validate() {
         eprintln!("通知内容不合法: {e}");
         std::process::exit(2);
     }
     let title = req.title.trim().to_string();
     let body_html = req.body.unwrap_or_default();
+    // 弹窗尺寸三级解析:CLI 参数 > config.toml > 默认(与服务端同口径)
+    let size = notify::popup::resolve_size(width, height, cfg.popup_width, cfg.popup_height);
 
     // 服务在运行:走 HTTP 通道(弹窗归服务持有,CLI 立即返回)
     if !fallback
@@ -27,7 +41,7 @@ pub fn run(cfg: &Config, title: String, body: Option<String>, fallback: bool) {
             Some(crate::ctl::Probe::Ours { .. })
         )
     {
-        deliver_via_service(rec.port, &title, &body_html);
+        deliver_via_service(rec.port, &title, &body_html, width, height);
         return;
     }
 
@@ -37,7 +51,7 @@ pub fn run(cfg: &Config, title: String, body: Option<String>, fallback: bool) {
         && crate::screen::work_area().is_some();
     if !gui_ok {
         let presenter = notify::fallback::SystemPresenter::new(cfg);
-        if presenter.present(&title, &body_html) {
+        if presenter.present(&title, &body_html, size) {
             println!("已发送系统通知(via=system)");
         } else {
             eprintln!("系统通知发送失败(详见日志)");
@@ -48,16 +62,28 @@ pub fn run(cfg: &Config, title: String, body: Option<String>, fallback: bool) {
 
     println!("弹窗已显示(无运行中服务,本进程驻留至点击关闭)");
     // 单发模式:daemon 预置本条通知,弹窗关闭后事件循环退出、进程结束
-    if let Err(e) = notify::app::run_single(title, body_html) {
+    if let Err(e) = notify::app::run_single(title, body_html, size) {
         eprintln!("事件循环异常: {e}");
         std::process::exit(1);
     }
 }
 
 /// 经运行中服务的 /notify 投递(与浏览器/SDK 完全同路径)
-fn deliver_via_service(port: u16, title: &str, body_html: &str) {
-    let payload = serde_json::json!({ "title": title, "body": body_html }).to_string();
-    match crate::ctl::request(port, "POST", "/notify", &payload) {
+fn deliver_via_service(
+    port: u16,
+    title: &str,
+    body_html: &str,
+    width: Option<u16>,
+    height: Option<u16>,
+) {
+    let mut payload = serde_json::json!({ "title": title, "body": body_html });
+    if let Some(w) = width {
+        payload["width"] = w.into();
+    }
+    if let Some(h) = height {
+        payload["height"] = h.into();
+    }
+    match crate::ctl::request(port, "POST", "/notify", &payload.to_string()) {
         Some(resp) if resp.contains("\"ok\":true") => {
             let via = serde_json::from_str::<serde_json::Value>(&resp)
                 .ok()

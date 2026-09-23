@@ -41,11 +41,11 @@ SDK 侧 `createNotifyService({ token: 'xxx' })` 同步配置;`info` 可查看生
 GET  /            → 演示页(内嵌)
 GET  /sdk.js      → SDK 产物(内嵌,演示页同源引用)
 GET  /health → {"app":"x-notify-service","version":"…","port":17320}
-POST /notify → {"ok":true,"via":"popup"|"system"}   body: {"title":"≤200字", "body":"≤2000字,HTML子集"}
+POST /notify → {"ok":true,"via":"popup"|"system"}   body: {"title":"≤200字", "body":"≤2000字,HTML子集", "width":"220-800可选", "height":"80-600可选"}
 POST /close  → {"ok":true}
 ```
 
-正文 HTML 子集:`<b>`、颜色、字号(11~18,按行)、`<br>`、实体;其余剥除,最多 5 行截断加 …。弹窗常驻不超时,新通知顶掉旧的(不堆叠)。
+正文 HTML 子集:`<b>`、颜色、字号(11~18,按行)、`<br>`、实体;其余剥除,超行数截断加 …(默认弹窗 327×106 容两行)。弹窗常驻不超时,新通知顶掉旧的(不堆叠);尺寸优先级:请求 `width`/`height` > `config.toml` 的 `popup_width`/`popup_height` > 默认。
 
 ## JSSDK
 

@@ -17,8 +17,8 @@ impl SystemPresenter {
 }
 
 impl Presenter for SystemPresenter {
-    fn present(&self, title: &str, body_html: &str) -> bool {
-        // 系统通知为纯文本,HTML 正文先剥离标记
+    fn present(&self, title: &str, body_html: &str, _size: super::popup::Size) -> bool {
+        // 系统通知为纯文本(尺寸不适用),HTML 正文先剥离标记
         let body = crate::html::to_plain_text(body_html);
         let mut n = notify_rust::Notification::new();
         n.appname("x-notify-service")

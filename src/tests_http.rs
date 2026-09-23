@@ -27,6 +27,8 @@ fn start_server(cfg_override: impl FnOnce(&mut Config)) -> u16 {
         allow_private_network: true,
         token: None,
         app_id: None,
+        popup_width: None,
+        popup_height: None,
     };
     cfg_override(&mut cfg);
     crate::server::start(cfg)
@@ -120,6 +122,28 @@ fn notify_bad_json_returns_400() {
     let port = start_server(|_| {});
     let (status, _, _) = http(port, "POST", "/notify", &json_header(), "{broken");
     assert_eq!(status, 400);
+}
+
+#[test]
+fn notify_size_out_of_range_returns_422() {
+    let port = start_server(|_| {});
+    // 校验先于投递(无头环境不触发通知链),与空标题同一口径
+    let (status, _, body) = http(
+        port,
+        "POST",
+        "/notify",
+        &json_header(),
+        r#"{"title":"t","width":100}"#,
+    );
+    assert_eq!(status, 422, "body: {body}");
+    let (status, _, _) = http(
+        port,
+        "POST",
+        "/notify",
+        &json_header(),
+        r#"{"title":"t","height":9999}"#,
+    );
+    assert_eq!(status, 422);
 }
 
 #[test]

@@ -140,9 +140,15 @@ export function createNotifyService(options: NotifyServiceOptions = {}): NotifyS
   /** POST /notify —— 不设置 Content-Type(默认 text/plain),属 CORS 简单请求,零预检 */
   function postNotify(baseUrl: string, payload: NotifyOptions): Promise<NotifyResult | null> {
     // 服务端字段为 snake_case
-    const body: Record<string, string> = { title: payload.title }
+    const body: Record<string, string | number> = { title: payload.title }
     if (payload.body !== undefined) {
       body.body = payload.body
+    }
+    if (payload.width !== undefined) {
+      body.width = payload.width
+    }
+    if (payload.height !== undefined) {
+      body.height = payload.height
     }
     return new Promise((resolve) => {
       const controller = new AbortController()
