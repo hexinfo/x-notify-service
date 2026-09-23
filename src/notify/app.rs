@@ -16,15 +16,12 @@ use iced::{Color, Element, Font, Length, Padding, Subscription, Task, Theme, dae
 use crate::html;
 use crate::notify::popup;
 
-const TITLE_COLOR: Color = Color::from_rgb8(0x1f, 0x23, 0x29);
-const BODY_COLOR: Color = Color::from_rgb8(0x5f, 0x66, 0x72);
-/// 关闭钮 × 静止色:与正文同灰阶,白底上清晰可读
-const CLOSE_GLYPH: Color = Color::from_rgb8(0x5f, 0x66, 0x72);
-/// 关闭钮 × 悬停色:加深到标题黑
-const CLOSE_GLYPH_HOVER: Color = Color::from_rgb8(0x1f, 0x23, 0x29);
-const CLOSE_HOVER_BG: Color = Color::from_rgb8(0xe4, 0xe6, 0xeb);
-/// 白底方角卡片黑色描边:紧凑尺寸下靠深色边界与桌面分离
-const CARD_BORDER: Color = Color::BLACK;
+const CARD_BORDER: Color = Color::from_rgb8(0x1c, 0x27, 0x38);
+/// 关闭钮 × 静止色:标题栏内保持可见但低于标题层级
+const CLOSE_GLYPH: Color = Color::from_rgb8(0xc7, 0xd0, 0xdd);
+const CLOSE_GLYPH_HOVER: Color = Color::WHITE;
+const CLOSE_HOVER_BG: Color = Color::from_rgb8(0x3d, 0x4c, 0x62);
+const HEADER_H: f32 = 38.0;
 
 /// 平台标准 UI 字体族:钉死族名让 CJK 与拉丁同族——iced 默认 SansSerif
 /// 解析为 "Open Sans"(各平台普遍缺失),按脚本回退后拉丁落到 Helvetica 系,
@@ -57,6 +54,7 @@ pub enum Message {
         quit_on_close: bool,
         /// 本条通知的弹窗尺寸(请求/默认解析后的生效值)
         size: popup::Size,
+        colors: popup::Colors,
     },
     /// 请求关闭弹窗(点击窗口任意处/关闭钮/HTTP /close/系统关闭请求)
     Close,
@@ -84,6 +82,7 @@ struct State {
     area: crate::screen::WorkArea,
     /// 当前弹窗尺寸(随每条通知更新,复用窗口时据此 resize)
     size: popup::Size,
+    colors: popup::Colors,
     /// 当前滑入剩余偏移(px),0 表示就位
     slide: f32,
     hover_close: bool,
@@ -104,6 +103,7 @@ impl State {
                 scale: 1.0,
             },
             size: popup::Size::DEFAULT,
+            colors: popup::Colors::DEFAULT,
             slide: popup::SLIDE_PX,
             hover_close: false,
         }
@@ -116,7 +116,12 @@ pub fn run_service() -> iced::Result {
 }
 
 /// 单发模式(notify 子命令):boot 即注入一条通知,弹窗关闭后退出
-pub fn run_single(title: String, body_html: String, size: popup::Size) -> iced::Result {
+pub fn run_single(
+    title: String,
+    body_html: String,
+    size: popup::Size,
+    colors: popup::Colors,
+) -> iced::Result {
     build_daemon(move || {
         (
             State::new(),
@@ -125,6 +130,7 @@ pub fn run_single(title: String, body_html: String, size: popup::Size) -> iced::
                 body_html: body_html.clone(),
                 quit_on_close: true,
                 size,
+                colors,
             }),
         )
     })
@@ -138,7 +144,7 @@ fn build_daemon(boot: impl Fn() -> (State, Task<Message>) + 'static) -> iced::Re
         .default_font(UI_FONT)
         .style(|_state, _theme| iced::theme::Style {
             background_color: Color::WHITE,
-            text_color: TITLE_COLOR,
+            text_color: color(popup::Colors::DEFAULT.header_text),
         })
         .run()
 }
@@ -155,7 +161,8 @@ fn update(state: &mut State, message: Message) -> Task<Message> {
             body_html,
             quit_on_close,
             size,
-        } => notify(state, title, &body_html, quit_on_close, size),
+            colors,
+        } => notify(state, title, &body_html, quit_on_close, size, colors),
         Message::Opened(_id) => {
             // 原生窗口已映射:补设 X11 属性(窗口类型/状态/图标);
             // 置顶再走一次 ClientMessage(映射前发送会被 WM 丢弃,EWMH 语义)
@@ -181,6 +188,9 @@ fn update(state: &mut State, message: Message) -> Task<Message> {
                 state.window = None;
                 // 下次开窗重新滑入
                 state.slide = popup::SLIDE_PX;
+                // 窗口在悬停状态下被点击销毁时不会再收到 on_exit；
+                // 清掉瞬时交互态，避免下次开窗沿用悬停背景。
+                state.hover_close = false;
                 if state.quit_on_close {
                     return iced::exit();
                 }
@@ -234,6 +244,7 @@ fn notify(
     body_html: &str,
     quit_on_close: bool,
     size: popup::Size,
+    colors: popup::Colors,
 ) -> Task<Message> {
     let Some(area) = crate::screen::work_area() else {
         log::warn!("无法获取屏幕工作区,本条通知走系统通知");
@@ -244,6 +255,7 @@ fn notify(
     state.quit_on_close = quit_on_close;
     state.title = title;
     state.size = size;
+    state.colors = colors;
     state.body = html::to_lines(&html::parse(body_html, popup::body_limits(size)));
     let (px, py) = popup::landing(&area, size);
     log::info!(
@@ -283,32 +295,34 @@ fn subscription(_state: &State) -> Subscription<Message> {
 }
 
 fn view(state: &State, _window: window::Id) -> Element<'_, Message> {
-    // 滑入偏移并入左内边距:入场动画期间只有内容自右向左就位,
-    // 卡片与描边落定不动——避免"白底矩形先现、带框卡片再拉过去"的观感
-    let card = container(
-        Column::with_capacity(2)
-            .push(title_row(state))
-            .push(body_column(state))
-            .spacing(popup::ROW_GAP),
-    )
-    .padding(Padding {
-        top: popup::PAD_TOP,
-        bottom: popup::PAD_BOTTOM,
-        left: popup::PAD_LEFT + state.slide,
-        right: popup::PAD_RIGHT,
-    })
-    .width(Length::Fill)
-    .height(Length::Fill)
-    .style(|_theme| card_style());
+    // 深色标题栏提供稳定轮廓:白色网页全屏时不再只靠一圈细边辨认通知。
+    // 滑入仍只作用于内容，窗口与外框保持落定不动。
+    let header = container(title_row(state))
+        .height(HEADER_H)
+        .width(Length::Fill)
+        .style(move |_theme| header_style(color(state.colors.header_background)));
+    let body = container(body_column(state))
+        .padding(Padding {
+            top: 8.0,
+            bottom: 8.0,
+            left: popup::PAD_LEFT + state.slide,
+            right: popup::PAD_RIGHT,
+        })
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .style(move |_theme| body_panel_style(color(state.colors.body_background)));
+    let card = container(Column::with_capacity(2).push(header).push(body))
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .style(|_theme| card_style());
 
     // 整窗点击关闭(与关闭钮同为 Close,重复消息幂等)
     mouse_area(card).on_press(Message::Close).into()
 }
 
-/// 白底方角卡片描边
+/// 深色外框把双色卡片收成一个整体
 fn card_style() -> ContainerStyle {
     ContainerStyle {
-        background: Some(Color::WHITE.into()),
         border: iced::Border {
             color: CARD_BORDER,
             width: 1.0,
@@ -318,47 +332,82 @@ fn card_style() -> ContainerStyle {
     }
 }
 
+fn header_style(background: Color) -> ContainerStyle {
+    ContainerStyle {
+        background: Some(background.into()),
+        ..ContainerStyle::default()
+    }
+}
+
+fn body_panel_style(background: Color) -> ContainerStyle {
+    ContainerStyle {
+        background: Some(background.into()),
+        ..ContainerStyle::default()
+    }
+}
+
 /// 标题行:加粗标题(单行截断)+ 关闭钮,垂直居中
 fn title_row(state: &State) -> Element<'_, Message> {
     row![
-        text(popup::elide_title(&state.title, state.size.width))
-            .size(16.0)
-            .font(BOLD)
-            .color(TITLE_COLOR)
-            .wrapping(iced::widget::text::Wrapping::None)
-            .width(Length::Fill),
+        container(
+            text(popup::elide_title(&state.title, state.size.width))
+                .size(16.0)
+                .font(BOLD)
+                .color(color(state.colors.header_text))
+                .wrapping(iced::widget::text::Wrapping::None)
+                .width(Length::Fill),
+        )
+        .padding(Padding {
+            top: 0.0,
+            bottom: 0.0,
+            left: popup::PAD_LEFT + state.slide,
+            right: popup::PAD_RIGHT,
+        })
+        .height(Length::Fill)
+        .align_y(iced::alignment::Vertical::Center)
+        .width(Length::Fill),
         close_button(state.hover_close),
     ]
-    .height(popup::TITLE_ROW_H)
+    .height(Length::Fill)
     .align_y(iced::Alignment::Center)
     .into()
 }
 
-/// 关闭钮:20×20 圆形 hover 底色,字形随 hover 加深,垂直水平居中
+/// 关闭钮占满标题栏右端方格:与上/右外框贴齐,静止时不显示格子边界
 fn close_button(hover: bool) -> Element<'static, Message> {
     let glyph = if hover {
         CLOSE_GLYPH_HOVER
     } else {
         CLOSE_GLYPH
     };
-    let circle = container(text("×").size(16.0).font(UI_FONT).color(glyph))
-        .width(20.0)
-        .height(20.0)
+    let glyph = text("×")
+        .size(16.0)
+        .line_height(1.0)
+        .font(UI_FONT)
+        .color(glyph)
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .center();
+    let circle = container(glyph)
+        // 字体的 × 字面重心略低；底部多留 2px，使视觉中心上移 1px。
+        // 点击区域仍保持完整的 38×38。
+        .padding(Padding {
+            top: 0.0,
+            bottom: 2.0,
+            left: 0.0,
+            right: 0.0,
+        })
+        .width(HEADER_H)
+        .height(HEADER_H)
         // iced Container 默认 Left/Top 对齐,必须显式居中
         .align_x(iced::alignment::Horizontal::Center)
         .align_y(iced::alignment::Vertical::Center)
         .style(move |_theme| ContainerStyle {
             background: hover.then_some(CLOSE_HOVER_BG.into()),
-            border: iced::Border {
-                radius: iced::border::Radius::from(10.0),
-                ..iced::Border::default()
-            },
             ..ContainerStyle::default()
         });
 
-    let slot = container(circle).center(popup::TITLE_ROW_H);
-
-    mouse_area(slot)
+    mouse_area(circle)
         .on_press(Message::Close)
         .on_enter(Message::CloseHover(true))
         .on_exit(Message::CloseHover(false))
@@ -388,10 +437,14 @@ fn body_column(state: &State) -> Element<'_, Message> {
                 .line_height(popup::BODY_LINE_HEIGHT)
                 // 行由 Rust 侧预折,禁二次换行:估宽偏差只裁切,不产生额外行(保住 5 行上限)
                 .wrapping(iced::widget::text::Wrapping::None)
-                .color(BODY_COLOR),
+                .color(color(state.colors.body_text)),
         );
     }
     lines.into()
+}
+
+const fn color([red, green, blue]: [u8; 3]) -> Color {
+    Color::from_rgb8(red, green, blue)
 }
 
 /// 延时投递一条消息(thread-pool 后端无 Timer;短生命周期线程驱动)
@@ -459,5 +512,38 @@ mod bridge {
         let (sender, receiver) = unbounded();
         *locked() = Some(sender);
         receiver
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Message, State, body_panel_style, color, header_style, update};
+    use crate::notify::popup::Colors;
+
+    #[test]
+    fn notification_sections_keep_strong_visual_contrast() {
+        let colors = Colors::DEFAULT;
+        assert_eq!(
+            header_style(color(colors.header_background)).background,
+            Some(color(colors.header_background).into())
+        );
+        assert_eq!(
+            body_panel_style(color(colors.body_background)).background,
+            Some(color(colors.body_background).into())
+        );
+        assert_ne!(colors.header_background, colors.body_background);
+    }
+
+    #[test]
+    fn closing_window_clears_close_hover_state() {
+        let mut state = State::new();
+        let id = iced::window::Id::unique();
+        state.window = Some(id);
+
+        let _ = update(&mut state, Message::CloseHover(true));
+        assert!(state.hover_close);
+        let _ = update(&mut state, Message::Closed(id));
+
+        assert!(!state.hover_close);
     }
 }

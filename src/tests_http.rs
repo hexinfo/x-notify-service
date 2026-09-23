@@ -145,6 +145,19 @@ fn notify_size_out_of_range_returns_422() {
 }
 
 #[test]
+fn notify_invalid_color_returns_422() {
+    let port = start_server(|_| {});
+    let (status, _, body) = http(
+        port,
+        "POST",
+        "/notify",
+        &json_header(),
+        r#"{"title":"t","headerBackgroundColor":"red"}"#,
+    );
+    assert_eq!(status, 422, "body: {body}");
+}
+
+#[test]
 fn notify_unknown_path_returns_404() {
     let port = start_server(|_| {});
     let (status, _, _) = http(port, "GET", "/nonexistent", &[], "");

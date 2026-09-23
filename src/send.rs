@@ -10,28 +10,21 @@ use crate::config::Config;
 use crate::notify;
 use crate::notify::Presenter as _;
 
-pub fn run(
-    cfg: &Config,
-    title: String,
-    body: Option<String>,
-    width: Option<u16>,
-    height: Option<u16>,
-    fallback: bool,
-) {
-    let req = crate::api::NotifyRequest {
-        title,
-        body,
-        width,
-        height,
-    };
+pub fn run(cfg: &Config, req: &crate::api::NotifyRequest, fallback: bool) {
     if let Err(e) = req.validate() {
         eprintln!("通知内容不合法: {e}");
         std::process::exit(2);
     }
     let title = req.title.trim().to_string();
-    let body_html = req.body.unwrap_or_default();
+    let body_html = req.body.clone().unwrap_or_default();
     // 弹窗尺寸解析:CLI 参数 > 默认(与服务端同口径;范围已随 req.validate 校验)
-    let size = notify::popup::resolve_size(width, height);
+    let size = notify::popup::resolve_size(req.width, req.height);
+    let colors = notify::popup::resolve_colors(
+        req.header_background_color.as_deref(),
+        req.header_text_color.as_deref(),
+        req.body_background_color.as_deref(),
+        req.body_text_color.as_deref(),
+    );
 
     // 服务在运行:走 HTTP 通道(弹窗归服务持有,CLI 立即返回)
     if !fallback
@@ -41,7 +34,7 @@ pub fn run(
             Some(crate::ctl::Probe::Ours { .. })
         )
     {
-        deliver_via_service(rec.port, &title, &body_html, width, height);
+        deliver_via_service(rec.port, &title, &body_html, req);
         return;
     }
 
@@ -51,7 +44,7 @@ pub fn run(
         && crate::screen::work_area().is_some();
     if !gui_ok {
         let presenter = notify::fallback::SystemPresenter::new(cfg);
-        if presenter.present(&title, &body_html, size) {
+        if presenter.present(&title, &body_html, size, colors) {
             println!("已发送系统通知(via=system)");
         } else {
             eprintln!("系统通知发送失败(详见日志)");
@@ -62,26 +55,33 @@ pub fn run(
 
     println!("弹窗已显示(无运行中服务,本进程驻留至点击关闭)");
     // 单发模式:daemon 预置本条通知,弹窗关闭后事件循环退出、进程结束
-    if let Err(e) = notify::app::run_single(title, body_html, size) {
+    if let Err(e) = notify::app::run_single(title, body_html, size, colors) {
         eprintln!("事件循环异常: {e}");
         std::process::exit(1);
     }
 }
 
 /// 经运行中服务的 /notify 投递(与浏览器/SDK 完全同路径)
-fn deliver_via_service(
-    port: u16,
-    title: &str,
-    body_html: &str,
-    width: Option<u16>,
-    height: Option<u16>,
-) {
+fn deliver_via_service(port: u16, title: &str, body_html: &str, req: &crate::api::NotifyRequest) {
     let mut payload = serde_json::json!({ "title": title, "body": body_html });
-    if let Some(w) = width {
+    if let Some(w) = req.width {
         payload["width"] = w.into();
     }
-    if let Some(h) = height {
+    if let Some(h) = req.height {
         payload["height"] = h.into();
+    }
+    for (key, value) in [
+        (
+            "headerBackgroundColor",
+            req.header_background_color.as_ref(),
+        ),
+        ("headerTextColor", req.header_text_color.as_ref()),
+        ("bodyBackgroundColor", req.body_background_color.as_ref()),
+        ("bodyTextColor", req.body_text_color.as_ref()),
+    ] {
+        if let Some(value) = value {
+            payload[key] = value.clone().into();
+        }
     }
     match crate::ctl::request(port, "POST", "/notify", &payload.to_string()) {
         Some(resp) if resp.contains("\"ok\":true") => {

@@ -27,8 +27,12 @@
       <legend>通知</legend>
       <label>标题 <input id="inp-title" value="工单提醒" /></label>
       <label>正文(HTML 子集:加粗 / 颜色 / 字号 / br)<input id="inp-body" value="待办通知 &lt;b&gt;1&lt;/b&gt; 条 &lt;br/&gt;15:21:05" /></label>
-      <label>宽度(220-800,留空用默认)<input id="inp-width" inputmode="numeric" placeholder="327" /></label>
-      <label>高度(80-600,留空用默认)<input id="inp-height" inputmode="numeric" placeholder="106" /></label>
+      <label>宽度(220-800,留空用默认)<input id="inp-width" inputmode="numeric" placeholder="220" /></label>
+      <label>高度(80-600,留空用默认)<input id="inp-height" inputmode="numeric" placeholder="100" /></label>
+      <label>标题背景色<input id="inp-header-bg" value="#273449" /></label>
+      <label>标题文字色<input id="inp-header-text" value="#FFFFFF" /></label>
+      <label>正文背景色<input id="inp-body-bg" value="#F7F9FC" /></label>
+      <label>正文文字色<input id="inp-body-text" value="#3F4754" /></label>
       <button type="button" class="primary" id="btn-send">发送通知</button>
       <button type="button" id="btn-launch">拉起服务</button>
       <button type="button" id="btn-close">关闭弹窗</button>
@@ -56,12 +60,21 @@
       document.getElementById('btn-send').onclick = async () => {
         const title = document.getElementById('inp-title').value
         const body = document.getElementById('inp-body').value
-        // 宽高可选:留空不传字段(走默认 327×106)
+        // 宽高与颜色可选:留空不传字段(走服务端默认)
         const opts = { title, body }
         const w = document.getElementById('inp-width').value.trim()
         const h = document.getElementById('inp-height').value.trim()
         if (w !== '') opts.width = Number(w)
         if (h !== '') opts.height = Number(h)
+        for (const [field, id] of [
+          ['headerBackgroundColor', 'inp-header-bg'],
+          ['headerTextColor', 'inp-header-text'],
+          ['bodyBackgroundColor', 'inp-body-bg'],
+          ['bodyTextColor', 'inp-body-text'],
+        ]) {
+          const value = document.getElementById(id).value.trim()
+          if (value !== '') opts[field] = value
+        }
         const r = await svc.notify(opts)
         log(r.ok ? `发送成功: via=${r.via}` : '未送达(服务未运行,静默失败)')
       }

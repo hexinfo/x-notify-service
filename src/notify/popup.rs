@@ -11,9 +11,61 @@ pub struct Size {
 impl Size {
     /// 默认紧凑横幅:常规通知为标题 + 一两行正文(时间戳折到第二行不被裁)
     pub const DEFAULT: Self = Self {
-        width: 327.0,
-        height: 106.0,
+        width: 220.0,
+        height: 100.0,
     };
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Colors {
+    pub header_background: [u8; 3],
+    pub header_text: [u8; 3],
+    pub body_background: [u8; 3],
+    pub body_text: [u8; 3],
+}
+
+impl Colors {
+    pub const DEFAULT: Self = Self {
+        header_background: [0x27, 0x34, 0x49],
+        header_text: [0xff, 0xff, 0xff],
+        body_background: [0xf7, 0xf9, 0xfc],
+        body_text: [0x3f, 0x47, 0x54],
+    };
+}
+
+pub fn parse_hex_color(value: &str) -> Option<[u8; 3]> {
+    let hex = value.strip_prefix('#')?;
+    if hex.len() != 6 || !hex.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return None;
+    }
+    Some([
+        u8::from_str_radix(&hex[0..2], 16).ok()?,
+        u8::from_str_radix(&hex[2..4], 16).ok()?,
+        u8::from_str_radix(&hex[4..6], 16).ok()?,
+    ])
+}
+
+pub fn resolve_colors(
+    header_background: Option<&str>,
+    header_text: Option<&str>,
+    body_background: Option<&str>,
+    body_text: Option<&str>,
+) -> Colors {
+    let defaults = Colors::DEFAULT;
+    Colors {
+        header_background: header_background
+            .and_then(parse_hex_color)
+            .unwrap_or(defaults.header_background),
+        header_text: header_text
+            .and_then(parse_hex_color)
+            .unwrap_or(defaults.header_text),
+        body_background: body_background
+            .and_then(parse_hex_color)
+            .unwrap_or(defaults.body_background),
+        body_text: body_text
+            .and_then(parse_hex_color)
+            .unwrap_or(defaults.body_text),
+    }
 }
 
 /// 尺寸取值范围(逻辑像素):请求越界由 API 层 422 拒绝
@@ -244,6 +296,8 @@ mod tests {
     #[test]
     fn size_resolution_priority() {
         let d = Size::DEFAULT;
+        assert!((d.width - 220.0).abs() < f64::EPSILON);
+        assert!((d.height - 100.0).abs() < f64::EPSILON);
         // 请求 > 默认(逐轴独立)
         assert_eq!(
             resolve_size(Some(400), None),

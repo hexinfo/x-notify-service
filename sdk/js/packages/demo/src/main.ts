@@ -39,8 +39,17 @@ $('btn-launch').addEventListener('click', () => {
 function send(): void {
   const title = ($('inp-title') as HTMLInputElement).value
   const body = ($('inp-body') as HTMLInputElement).value
-  // 宽高可选:留空不传字段(走默认 327×106)
-  const opts: { title: string; body: string; width?: number; height?: number } = { title, body }
+  // 宽高与颜色可选:留空不传字段(走服务端默认)
+  const opts: {
+    title: string
+    body: string
+    width?: number
+    height?: number
+    headerBackgroundColor?: string
+    headerTextColor?: string
+    bodyBackgroundColor?: string
+    bodyTextColor?: string
+  } = { title, body }
   const width = ($('inp-width') as HTMLInputElement).value.trim()
   const height = ($('inp-height') as HTMLInputElement).value.trim()
   if (width !== '') {
@@ -49,6 +58,16 @@ function send(): void {
   if (height !== '') {
     opts.height = Number(height)
   }
+  const colors = {
+    headerBackgroundColor: ($('inp-header-bg') as HTMLInputElement).value.trim(),
+    headerTextColor: ($('inp-header-text') as HTMLInputElement).value.trim(),
+    bodyBackgroundColor: ($('inp-body-bg') as HTMLInputElement).value.trim(),
+    bodyTextColor: ($('inp-body-text') as HTMLInputElement).value.trim(),
+  }
+  Object.assign(
+    opts,
+    Object.fromEntries(Object.entries(colors).filter(([, value]) => value !== '')),
+  )
   bridge
     .notify(opts)
     .then((result) =>

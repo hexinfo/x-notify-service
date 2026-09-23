@@ -17,6 +17,14 @@ pub struct NotifyRequest {
     pub width: Option<u16>,
     /// 弹窗高度(逻辑像素;缺省用内置默认)
     pub height: Option<u16>,
+    #[serde(rename = "headerBackgroundColor")]
+    pub header_background_color: Option<String>,
+    #[serde(rename = "headerTextColor")]
+    pub header_text_color: Option<String>,
+    #[serde(rename = "bodyBackgroundColor")]
+    pub body_background_color: Option<String>,
+    #[serde(rename = "bodyTextColor")]
+    pub body_text_color: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -66,6 +74,7 @@ pub enum NotifyError {
     BodyTooLong,
     WidthOutOfRange,
     HeightOutOfRange,
+    InvalidColor,
 }
 
 impl NotifyError {
@@ -76,7 +85,8 @@ impl NotifyError {
             | Self::TitleTooLong
             | Self::BodyTooLong
             | Self::WidthOutOfRange
-            | Self::HeightOutOfRange => 422,
+            | Self::HeightOutOfRange
+            | Self::InvalidColor => 422,
         }
     }
 }
@@ -90,6 +100,7 @@ impl std::fmt::Display for NotifyError {
             Self::BodyTooLong => write!(f, "body 过长(最多 {BODY_MAX} 字符)"),
             Self::WidthOutOfRange => write!(f, "width 越界({MIN_W}-{MAX_W} 逻辑像素)"),
             Self::HeightOutOfRange => write!(f, "height 越界({MIN_H}-{MAX_H} 逻辑像素)"),
+            Self::InvalidColor => write!(f, "颜色必须使用 #RRGGBB 格式"),
         }
     }
 }
@@ -126,6 +137,19 @@ impl NotifyRequest {
         {
             return Err(NotifyError::HeightOutOfRange);
         }
+        for color in [
+            self.header_background_color.as_deref(),
+            self.header_text_color.as_deref(),
+            self.body_background_color.as_deref(),
+            self.body_text_color.as_deref(),
+        ]
+        .into_iter()
+        .flatten()
+        {
+            if crate::notify::popup::parse_hex_color(color).is_none() {
+                return Err(NotifyError::InvalidColor);
+            }
+        }
         Ok(())
     }
 }
@@ -143,12 +167,30 @@ mod tests {
     }
 
     #[test]
+    fn parses_and_validates_popup_colors() {
+        let req = NotifyRequest::from_json(
+            r##"{"title":"t","headerBackgroundColor":"#112233","headerTextColor":"#FFFFFF","bodyBackgroundColor":"#AABBCC","bodyTextColor":"#010203"}"##,
+        )
+        .unwrap();
+        req.validate().unwrap();
+        assert_eq!(req.header_background_color.as_deref(), Some("#112233"));
+
+        let invalid =
+            NotifyRequest::from_json(r#"{"title":"t","headerBackgroundColor":"red"}"#).unwrap();
+        assert!(matches!(invalid.validate(), Err(NotifyError::InvalidColor)));
+    }
+
+    #[test]
     fn validate_branches() {
         let mk = |title: &str| NotifyRequest {
             title: title.into(),
             body: None,
             width: None,
             height: None,
+            header_background_color: None,
+            header_text_color: None,
+            body_background_color: None,
+            body_text_color: None,
         };
         assert!(matches!(mk(" ").validate(), Err(NotifyError::EmptyTitle)));
         assert!(matches!(
@@ -160,6 +202,10 @@ mod tests {
             body: Some("b".repeat(BODY_MAX + 1)),
             width: None,
             height: None,
+            header_background_color: None,
+            header_text_color: None,
+            body_background_color: None,
+            body_text_color: None,
         };
         assert!(matches!(long.validate(), Err(NotifyError::BodyTooLong)));
         // 合法请求以 unwrap 断言(测试放宽见 clippy.toml)
@@ -173,6 +219,10 @@ mod tests {
             body: None,
             width: None,
             height: None,
+            header_background_color: None,
+            header_text_color: None,
+            body_background_color: None,
+            body_text_color: None,
         };
         req.width = Some(MIN_W - 1);
         assert!(matches!(req.validate(), Err(NotifyError::WidthOutOfRange)));
@@ -192,5 +242,6 @@ mod tests {
         assert_eq!(NotifyError::TitleTooLong.status(), 422);
         assert_eq!(NotifyError::WidthOutOfRange.status(), 422);
         assert_eq!(NotifyError::HeightOutOfRange.status(), 422);
+        assert_eq!(NotifyError::InvalidColor.status(), 422);
     }
 }

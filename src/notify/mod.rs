@@ -16,7 +16,13 @@ pub static POPUP_AVAILABLE: AtomicBool = AtomicBool::new(false);
 /// `size` 为解析后的弹窗尺寸,仅弹窗渠道消费
 pub trait Presenter {
     /// 展示通知;返回 false 表示本渠道投递失败(调用方降级到下一渠道)
-    fn present(&self, title: &str, body_html: &str, size: popup::Size) -> bool;
+    fn present(
+        &self,
+        title: &str,
+        body_html: &str,
+        size: popup::Size,
+        colors: popup::Colors,
+    ) -> bool;
 }
 
 /// 右下角置顶弹窗(主渠道):经 bridge 通道投递给 iced 事件循环。
@@ -25,7 +31,13 @@ pub trait Presenter {
 pub struct PopupPresenter;
 
 impl Presenter for PopupPresenter {
-    fn present(&self, title: &str, body_html: &str, size: popup::Size) -> bool {
+    fn present(
+        &self,
+        title: &str,
+        body_html: &str,
+        size: popup::Size,
+        colors: popup::Colors,
+    ) -> bool {
         if !POPUP_AVAILABLE.load(Ordering::Relaxed) {
             return false;
         }
@@ -34,6 +46,7 @@ impl Presenter for PopupPresenter {
             body_html: body_html.to_owned(),
             quit_on_close: false,
             size,
+            colors,
         });
         if !posted {
             log::warn!("弹窗投递失败,降级系统通知");
@@ -48,9 +61,15 @@ pub fn dispatch(cfg: &Config, req: &NotifyRequest) -> NotifyVia {
     let title = req.title.trim();
     let body = req.body.as_deref().unwrap_or("");
     let size = popup::resolve_size(req.width, req.height);
-    if PopupPresenter.present(title, body, size) {
+    let colors = popup::resolve_colors(
+        req.header_background_color.as_deref(),
+        req.header_text_color.as_deref(),
+        req.body_background_color.as_deref(),
+        req.body_text_color.as_deref(),
+    );
+    if PopupPresenter.present(title, body, size, colors) {
         return NotifyVia::Popup;
     }
-    fallback::SystemPresenter::new(cfg).present(title, body, size);
+    fallback::SystemPresenter::new(cfg).present(title, body, size, colors);
     NotifyVia::System
 }

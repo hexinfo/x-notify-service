@@ -150,6 +150,18 @@ export function createNotifyService(options: NotifyServiceOptions = {}): NotifyS
     if (payload.height !== undefined) {
       body.height = payload.height
     }
+    if (payload.headerBackgroundColor !== undefined) {
+      body.headerBackgroundColor = payload.headerBackgroundColor
+    }
+    if (payload.headerTextColor !== undefined) {
+      body.headerTextColor = payload.headerTextColor
+    }
+    if (payload.bodyBackgroundColor !== undefined) {
+      body.bodyBackgroundColor = payload.bodyBackgroundColor
+    }
+    if (payload.bodyTextColor !== undefined) {
+      body.bodyTextColor = payload.bodyTextColor
+    }
     return new Promise((resolve) => {
       const controller = new AbortController()
       const timer = setTimeout(() => {

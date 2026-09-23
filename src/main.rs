@@ -69,9 +69,23 @@ fn main() {
             body,
             width,
             height,
+            header_background_color,
+            header_text_color,
+            body_background_color,
+            body_text_color,
             fallback,
         }) => {
-            send::run(&cfg, title, body, width, height, fallback);
+            let req = api::NotifyRequest {
+                title,
+                body,
+                width,
+                height,
+                header_background_color,
+                header_text_color,
+                body_background_color,
+                body_text_color,
+            };
+            send::run(&cfg, &req, fallback);
         }
         Some(config::Command::Close) => send::close(),
     }

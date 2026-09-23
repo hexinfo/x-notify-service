@@ -17,7 +17,13 @@ impl SystemPresenter {
 }
 
 impl Presenter for SystemPresenter {
-    fn present(&self, title: &str, body_html: &str, _size: super::popup::Size) -> bool {
+    fn present(
+        &self,
+        title: &str,
+        body_html: &str,
+        _size: super::popup::Size,
+        _colors: super::popup::Colors,
+    ) -> bool {
         // 系统通知为纯文本(尺寸不适用),HTML 正文先剥离标记
         let body = crate::html::to_plain_text(body_html);
         let mut n = notify_rust::Notification::new();

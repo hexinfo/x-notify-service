@@ -69,13 +69,29 @@ pub enum Command {
         #[arg(short = 'b', long = "body")]
         body: Option<String>,
 
-        /// 弹窗宽度(逻辑像素,220-800;缺省 327)
+        /// 弹窗宽度(逻辑像素,220-800;缺省 220)
         #[arg(long)]
         width: Option<u16>,
 
-        /// 弹窗高度(逻辑像素,80-600;缺省 106)
+        /// 弹窗高度(逻辑像素,80-600;缺省 100)
         #[arg(long)]
         height: Option<u16>,
+
+        /// 标题栏背景色(#RRGGBB)
+        #[arg(long)]
+        header_background_color: Option<String>,
+
+        /// 标题文字颜色(#RRGGBB)
+        #[arg(long)]
+        header_text_color: Option<String>,
+
+        /// 正文背景色(#RRGGBB)
+        #[arg(long)]
+        body_background_color: Option<String>,
+
+        /// 正文默认文字颜色(#RRGGBB)
+        #[arg(long)]
+        body_text_color: Option<String>,
 
         /// 强制走系统通知兜底(不经弹窗)
         #[arg(short, long)]

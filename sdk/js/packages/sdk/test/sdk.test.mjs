@@ -57,7 +57,7 @@ test('伪服务(应用身份不符):discover 拒绝,notify 静默失败', async 
   assert.equal(r.ok, false)
 })
 
-test('真服务:discover 命中并缓存,notify 送达 snake_case 字段,close 幂等', async () => {
+test('真服务:discover 命中并缓存,notify 透传尺寸颜色,close 幂等', async () => {
   const { server, calls, port } = await mockServer({ port: 24540 })
   servers.push(server)
   const bridge = createNotifyService({ basePort: port, portRange: 3 })
@@ -65,13 +65,31 @@ test('真服务:discover 命中并缓存,notify 送达 snake_case 字段,close �
   const base = await bridge.discover(true)
   assert.equal(base, `http://127.0.0.1:${port}`)
 
-  const r = await bridge.notify({ title: '工单', body: '<b>紧急</b>' })
+  const r = await bridge.notify({
+    title: '工单',
+    body: '<b>紧急</b>',
+    width: 320,
+    height: 120,
+    headerBackgroundColor: '#112233',
+    headerTextColor: '#FFFFFF',
+    bodyBackgroundColor: '#F0F1F2',
+    bodyTextColor: '#334455',
+  })
   assert.equal(r.ok, true)
   assert.equal(calls.notify.length, 1)
   assert.deepEqual(
     calls.notify[0],
-    { title: '工单', body: '<b>紧急</b>' },
-    '字段应为 snake_case 且透传 HTML',
+    {
+      title: '工单',
+      body: '<b>紧急</b>',
+      width: 320,
+      height: 120,
+      headerBackgroundColor: '#112233',
+      headerTextColor: '#FFFFFF',
+      bodyBackgroundColor: '#F0F1F2',
+      bodyTextColor: '#334455',
+    },
+    '字段应完整透传',
   )
 
   await bridge.close()
