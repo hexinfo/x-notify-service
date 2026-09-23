@@ -31,22 +31,28 @@ for _ in $(seq 1 50); do
 done
 
 VIA=$(curl -s -X POST http://127.0.0.1:17320/notify \
-    -d '{"title":"兜底端到端","body":"<b>加粗</b>与<font color=\"#d93025\">红色</font>应剥为纯文本"}' \
+    -d '{"title":"兜底端到端","body":"**加粗** [工单](https://example.invalid/1) 与 `代码`"}' \
     | python3 -c 'import json,sys; print(json.load(sys.stdin)["via"])')
 echo "via=$VIA"
 
-python3 - "$VIA" "$OUT" <<'EOF'
+VIA_RAW=$(curl -s -X POST http://127.0.0.1:17320/notify \
+    -d '{"title":"HTML 原样","body":"保留 <b>原样</b> &"}' \
+    | python3 -c 'import json,sys; print(json.load(sys.stdin)["via"])')
+
+python3 - "$VIA" "$VIA_RAW" "$OUT" <<'EOF'
 import json, sys
 
-via, out = sys.argv[1], sys.argv[2]
+via, via_raw, out = sys.argv[1:]
 assert via == "system", f"应走系统通知,实际 via={via}"
+assert via_raw == "system", f"原样 HTML 应走系统通知,实际 via={via_raw}"
 lines = [json.loads(x) for x in open(out, encoding="utf-8")]
-assert lines, "mock 守护进程未收到任何通知"
-n = lines[-1]
+assert len(lines) >= 2, "mock 守护进程未收到两条通知"
+n, raw = lines[-2:]
 assert n["summary"] == "兜底端到端", n
-assert "加粗" in n["body"] and "<b>" not in n["body"], f"HTML 未剥除: {n['body']}"
-assert "红色" in n["body"], n
-print("PASS: 系统通知兜底真实送达,HTML 已剥为纯文本")
+assert n["body"] == "加粗 工单 与 代码", n
+assert raw["summary"] == "HTML 原样", raw
+assert raw["body"] == "保留 &lt;b&gt;原样&lt;/b&gt; &amp;", raw
+print("PASS: 系统通知兜底真实送达,Markdown 为纯文本且原样 HTML 已转义")
 EOF
 
 # CLI notify -f:强制兜底,应真实送达 mock 守护进程且退出码 0

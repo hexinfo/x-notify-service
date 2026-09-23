@@ -67,7 +67,7 @@ test('真服务:discover 命中并缓存,notify 透传尺寸颜色,close 幂等'
 
   const r = await bridge.notify({
     title: '工单',
-    body: '<b>紧急</b>',
+    body: '**紧急**',
     width: 320,
     height: 120,
     headerBackgroundColor: '#112233',
@@ -81,7 +81,7 @@ test('真服务:discover 命中并缓存,notify 透传尺寸颜色,close 幂等'
     calls.notify[0],
     {
       title: '工单',
-      body: '<b>紧急</b>',
+      body: '**紧急**',
       width: 320,
       height: 120,
       headerBackgroundColor: '#112233',

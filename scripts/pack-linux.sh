@@ -35,22 +35,29 @@ build_in_docker() { # $1=platform $2=archname
         -v "$PWD/.ci-cache/cargo":/cargo \
         -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
         "${proxy_env[@]+"${proxy_env[@]}"}" \
-        -e CARGO_HOME=/cargo -e CARGO_TARGET_DIR=/work/target/linux-$2 \
+        -e CARGO_HOME=/cargo -e RUSTUP_HOME=/cargo/rustup \
+        -e CARGO_TARGET_DIR=/work/target/linux-$2 \
         "$IMAGE" sh -exc '
         # Debian 10 已 EOL:main 与 security 都改指 archive(security 缺失会导致
-        # fontconfig 依赖解析失败);归档源偶发 502,重试 3 次
+        # fontconfig 依赖解析失败)。基础镜像没有 CA 证书，先依靠 apt 签名校验
+        # 引导安装 ca-certificates，再恢复 HTTPS 证书校验。
         if grep -q buster /etc/os-release 2>/dev/null; then
-            printf "deb http://archive.debian.org/debian buster main\ndeb http://archive.debian.org/debian-security buster/updates main\n" > /etc/apt/sources.list
+            printf "deb https://archive.debian.org/debian buster main\ndeb https://archive.debian.org/debian-security buster/updates main\n" > /etc/apt/sources.list
             n=0
-            until apt-get -o Acquire::Check-Valid-Until=false update -qq; do
+            until apt-get -o Acquire::Check-Valid-Until=false \
+                -o Acquire::https::Verify-Peer=false -o Acquire::https::Verify-Host=false update -qq; do
                 n=$((n + 1)); [ "$n" -ge 3 ] && exit 1
                 sleep 3
             done
+            apt-get -o Acquire::Retries=8 \
+                -o Acquire::https::Verify-Peer=false -o Acquire::https::Verify-Host=false \
+                install -y -qq --no-install-recommends ca-certificates
         else
             apt-get update -qq
         fi
         apt-get -o Acquire::Retries=8 install -y -qq --no-install-recommends \
-            build-essential curl ca-certificates xz-utils pkg-config libfontconfig1-dev
+            build-essential curl ca-certificates xz-utils pkg-config libfontconfig1-dev \
+            libxcb1-dev libxkbcommon-dev libxkbcommon-x11-dev
         export PATH="/cargo/bin:$PATH"
         # 缓存恢复的 .ci-cache/cargo 可能是空目录(首次无缓存):rustup 存在但
         # default toolchain 缺失会报"no default is configured",重装兜底

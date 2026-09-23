@@ -15,7 +15,7 @@ export interface NotifyServiceOptions {
 export interface NotifyOptions {
   /** 通知标题(必填,最长 200 字符) */
   readonly title: string
-  /** 通知正文(最长 2000 字符);支持 HTML 子集:<b>/<strong> 加粗、<font color>/<span style="color:"> 颜色、<font size>/font-size 字号(11-18,按行生效)、<br> 换行、HTML 实体;其余标签自动剥除。弹窗常驻不超时,点击关闭或被新通知顶掉 */
+  /** 通知正文(最长 2000 字符);使用 CommonMark/GFM 兼容 Markdown。旧 HTML 子集不兼容,原样 HTML 不作为格式解析;链接不导航,图片及远程资源不加载(图片显示替代文本)。正文颜色由 bodyTextColor 统一控制。弹窗常驻不超时,点击关闭或被新通知顶掉 */
   readonly body?: string
   /** 弹窗宽度(逻辑像素,220-800);缺省 220 */
   readonly width?: number
@@ -27,7 +27,7 @@ export interface NotifyOptions {
   readonly headerTextColor?: string
   /** 正文背景色(#RRGGBB) */
   readonly bodyBackgroundColor?: string
-  /** 正文默认文字颜色(#RRGGBB);正文 HTML 中显式颜色优先 */
+  /** 正文文字颜色(#RRGGBB);Markdown 正文不支持内嵌颜色 */
   readonly bodyTextColor?: string
 }
 
