@@ -18,7 +18,7 @@ pub(super) fn wrap_lines(lines: LogicalLines, limits: Limits) -> WrappedLines {
     let LogicalLines(logical) = lines;
     let mut out: Vec<LineOut> = Vec::new();
     let mut truncated = false;
-    'outer: for Line(runs) in logical {
+    'outer: for (idx, Line(runs)) in logical.iter().enumerate() {
         let line_size = runs.iter().find_map(|r| r.style.size);
         let font = f64::from(line_size.unwrap_or(FontSize(super::BASE_FONT_SIZE)).0);
         let max_units = limits.line_units * f64::from(super::BASE_FONT_SIZE) / font;
@@ -42,6 +42,7 @@ pub(super) fn wrap_lines(lines: LogicalLines, limits: Limits) -> WrappedLines {
                     });
                     units = head.chars().map(char_units).sum();
                     seg = head;
+                    // 折行点即预算耗尽:当前字符及其后必被丢弃,是真截断
                     if out.len() >= limits.max_lines {
                         truncated = true;
                         break 'outer;
@@ -62,7 +63,13 @@ pub(super) fn wrap_lines(lines: LogicalLines, limits: Limits) -> WrappedLines {
             size: line_size,
         });
         if out.len() >= limits.max_lines {
-            truncated = true;
+            // 恰好填满且其后无非空内容:不是截断,不加 …
+            let remains = logical[idx + 1..]
+                .iter()
+                .any(|l| l.0.iter().any(|r| !r.text.is_empty()));
+            if remains {
+                truncated = true;
+            }
             break;
         }
     }
@@ -167,6 +174,27 @@ mod tests {
                 assert!(!super::is_no_line_start(c), "行首出现禁则标点: {c}");
             }
         }
+    }
+
+    /// 恰好填满行数上限不是截断,不加省略号(默认弹窗两行装"待办+时间"场景)
+    #[test]
+    fn exact_fill_lines_no_ellipsis() {
+        let limits = Limits {
+            line_units: 24.0,
+            max_lines: 2,
+        };
+        let wrapped = super::wrap_lines(
+            parse::parse_logical_lines("待办通知 <b>1</b> 条<br/>15:21:05"),
+            limits,
+        );
+        assert_eq!(wrapped.0.len(), 2);
+        let last: String = wrapped.0[1].runs.iter().map(|r| r.text.as_str()).collect();
+        assert_eq!(last, "15:21:05", "恰好两行不应追加省略号");
+        // 真超出仍截断加 …
+        let over = super::wrap_lines(parse::parse_logical_lines("一<br>二<br>三"), limits);
+        assert_eq!(over.0.len(), 2);
+        let tail: String = over.0[1].runs.iter().map(|r| r.text.as_str()).collect();
+        assert!(tail.ends_with('…'), "超出两行应截断加省略号: {tail}");
     }
 }
 
