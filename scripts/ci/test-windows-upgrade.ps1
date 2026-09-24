@@ -33,9 +33,19 @@ if (Test-Path -LiteralPath $old) { throw 'Legacy default directory remains' }
 $registered = (Get-ItemProperty -Path 'HKCU:\Software\Hexinfo\x-notify-service' -Name InstallDir).InstallDir
 if ($registered -ne $new) { throw "Wrong registered installation path: $registered" }
 
+# A preexisting new destination wins every name collision; the old files stay recoverable.
+New-Item -ItemType Directory -Path $old | Out-Null
+Set-Content -LiteralPath (Join-Path $old 'config.toml') -Value 'port = 17322'
+Set-Content -LiteralPath (Join-Path $old 'user-note.txt') -Value 'old conflicting note'
+Invoke-Setup @('/S')
+if ((Get-Content -LiteralPath (Join-Path $new 'config.toml') -Raw).Trim() -ne 'port = 17321') { throw 'New config was overwritten' }
+if ((Get-Content -LiteralPath (Join-Path $new 'user-note.txt') -Raw).Trim() -ne 'keep me') { throw 'New user file was overwritten' }
+if ((Get-Content -LiteralPath (Join-Path $old 'config.toml') -Raw).Trim() -ne 'port = 17322') { throw 'Conflicting old config was lost' }
+if ((Get-Content -LiteralPath (Join-Path $old 'user-note.txt') -Raw).Trim() -ne 'old conflicting note') { throw 'Conflicting old user file was lost' }
+
 Invoke-Setup @('/S', "/D=$customNew")
 if (-not (Test-Path -LiteralPath (Join-Path $customNew 'x-notify-service.exe'))) { throw 'Custom destination missing' }
 if ((Get-Content -LiteralPath (Join-Path $customOld 'user-note.txt') -Raw).Trim() -ne 'custom keep me') {
     throw 'Legacy custom directory was modified'
 }
-Write-Host 'Windows default and custom-path upgrade checks passed.'
+Write-Host 'Windows default, conflicting, and custom-path upgrade checks passed.'
