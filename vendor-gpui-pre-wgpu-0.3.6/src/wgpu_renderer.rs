@@ -292,7 +292,7 @@ impl WgpuRenderer {
                     surface
                 }
                 Err(primary_error) => {
-                    #[cfg(all(target_os = "linux", target_arch = "aarch64"))]
+                    #[cfg(target_os = "linux")]
                     {
                         use crate::wgpu_context::USE_XLIB_COMPAT;
                         use raw_window_handle::RawWindowHandle;
@@ -322,7 +322,7 @@ impl WgpuRenderer {
                             return Err(primary_error);
                         }
                     }
-                    #[cfg(not(all(target_os = "linux", target_arch = "aarch64")))]
+                    #[cfg(not(target_os = "linux"))]
                     return Err(primary_error);
                 }
             },
@@ -2169,7 +2169,7 @@ fn create_surface(
     instance: &wgpu::Instance,
     raw_window_handle: raw_window_handle::RawWindowHandle,
 ) -> anyhow::Result<wgpu::Surface<'static>> {
-    #[cfg(all(target_os = "linux", target_arch = "aarch64"))]
+    #[cfg(target_os = "linux")]
     let raw_window_handle = {
         use crate::wgpu_context::USE_XLIB_COMPAT;
         use raw_window_handle::{RawWindowHandle, XlibWindowHandle};

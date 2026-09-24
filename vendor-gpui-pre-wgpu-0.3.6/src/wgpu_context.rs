@@ -6,16 +6,16 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use wgpu::TextureFormat;
 
-#[cfg(all(target_os = "linux", target_arch = "aarch64"))]
+#[cfg(target_os = "linux")]
 pub(crate) static USE_XLIB_COMPAT: AtomicBool = AtomicBool::new(false);
 
-#[cfg(all(target_os = "linux", target_arch = "aarch64"))]
+#[cfg(target_os = "linux")]
 #[derive(Debug)]
 struct XlibDisplaySource {
     screen: i32,
 }
 
-#[cfg(all(target_os = "linux", target_arch = "aarch64"))]
+#[cfg(target_os = "linux")]
 impl raw_window_handle::HasDisplayHandle for XlibDisplaySource {
     fn display_handle(
         &self,
@@ -309,7 +309,7 @@ impl WgpuContext {
 
     #[cfg(not(target_family = "wasm"))]
     pub fn instance(display: Box<dyn wgpu::wgt::WgpuHasDisplayHandle>) -> wgpu::Instance {
-        #[cfg(all(target_os = "linux", target_arch = "aarch64"))]
+        #[cfg(target_os = "linux")]
         let display: Box<dyn wgpu::wgt::WgpuHasDisplayHandle> = {
             use raw_window_handle::{HasDisplayHandle, RawDisplayHandle};
             if USE_XLIB_COMPAT.load(Ordering::Acquire) {
