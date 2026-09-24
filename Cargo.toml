@@ -1,6 +1,6 @@
 [package]
 name = "x-notify-service"
-version = "3.2.1"
+version = "3.2.2"
 edition = "2024"
 publish = ["crates-io"]
 description = "跨平台消息通知服务:浏览器调用 → 右下角置顶弹窗(系统通知兜底)"

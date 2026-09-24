@@ -1,6 +1,6 @@
 {
   "name": "@hexinfo/x-notify-service-demo",
-  "version": "3.2.1",
+  "version": "3.2.2",
   "description": "x-notify-service SDK 演示页",
   "type": "module",
   "private": true,
