@@ -36,7 +36,44 @@ Assert (-not (Test-Path $newDir)) "New installation already exists: $newDir"
 Assert (-not (Test-Path $oldDir)) "Old installation already exists: $oldDir"
 
 try {
-    Invoke-Installer $Setup @('/S')
+    Write-Host "Pre-install Run key exists: $(Test-Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run')"
+    Write-Host "Pre-install Classes key exists: $(Test-Path 'HKCU:\Software\Classes')"
+    try {
+        Invoke-Installer $Setup @('/S')
+    } catch {
+        $originalError = $_
+        Write-Host "First installer failed: $originalError"
+        $installedExe = Join-Path $newDir "$app.exe"
+        Write-Host "Installed executable exists: $(Test-Path $installedExe)"
+        Write-Host "New data port exists: $(Test-Path (Join-Path $newDataDir 'port'))"
+        $newLogs = Join-Path $newDataDir 'logs'
+        Get-ChildItem $newLogs -File -ErrorAction SilentlyContinue | ForEach-Object {
+            Write-Host "Log tail: $($_.FullName)"
+            Get-Content $_.FullName -Tail 40 -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_ }
+        }
+        if (Test-Path $installedExe) {
+            $diagnosticOut = Join-Path $env:TEMP "hexinfo-install-retry-$PID.stdout"
+            $diagnosticErr = Join-Path $env:TEMP "hexinfo-install-retry-$PID.stderr"
+            try {
+                $diagnosticProcess = Start-Process -FilePath $installedExe -ArgumentList @('install') -PassThru -RedirectStandardOutput $diagnosticOut -RedirectStandardError $diagnosticErr
+                try {
+                    if ($diagnosticProcess.WaitForExit(10000)) {
+                        Write-Host "Direct install retry exit: $($diagnosticProcess.ExitCode)"
+                    } else {
+                        $diagnosticProcess.Kill()
+                        Write-Host 'Direct install retry timed out after 10 seconds'
+                    }
+                } finally {
+                    $diagnosticProcess.Dispose()
+                }
+                Write-Host "Direct install retry stdout: $(Get-Content $diagnosticOut -Raw -ErrorAction SilentlyContinue)"
+                Write-Host "Direct install retry stderr: $(Get-Content $diagnosticErr -Raw -ErrorAction SilentlyContinue)"
+            } catch {
+                Write-Host "Direct install retry diagnostic failed: $_"
+            }
+        }
+        throw $originalError
+    }
     Assert (Test-Path (Join-Path $newDir "$app.exe")) 'Fresh install missing executable'
     Assert ((Get-ItemProperty $newKey).InstallDir -eq $newDir) 'New install registry path is wrong'
     Assert ((Get-ItemProperty $uninstallKey).InstallLocation -eq $newDir) 'Uninstall registry path is wrong'
