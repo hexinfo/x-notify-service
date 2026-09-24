@@ -97,7 +97,7 @@ pub const FIXUP_DELAYS_MS: [u64; 4] = [50, 120, 250, 500];
 #[allow(clippy::integer_division_remainder_used)]
 pub fn corner_diameter(dpi: u32, width: i32, height: i32) -> i32 {
     let dpi = if dpi == 0 { 96 } else { dpi };
-    let scaled = dpi.saturating_mul(20).saturating_add(48) / 96;
+    let scaled = dpi.saturating_mul(14).saturating_add(48) / 96;
     let limit = u32::try_from(width.min(height)).unwrap_or_default();
     i32::try_from(scaled.min(limit)).unwrap_or(i32::MAX)
 }
@@ -302,8 +302,8 @@ mod tests {
 
     #[test]
     fn corner_diameter_scales_with_dpi_and_fits_window() {
-        assert_eq!(super::corner_diameter(96, 220, 100), 20);
-        assert_eq!(super::corner_diameter(144, 330, 150), 30);
+        assert_eq!(super::corner_diameter(96, 220, 100), 14);
+        assert_eq!(super::corner_diameter(144, 330, 150), 21);
         assert_eq!(super::corner_diameter(192, 12, 8), 8);
     }
 
