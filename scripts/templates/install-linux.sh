@@ -39,20 +39,36 @@ report_install_result() {
 }
 trap report_install_result EXIT
 
-# 仅停止由旧端口文件指向、且可执行文件确实是旧安装位置的实例。
+# 仅停止端口文件指向、且可执行文件确实位于受管安装位置的实例。
 OLD_PROGRAM="$BIN_DIR/x-notify-service"
-PORT_FILE="$DATA_HOME/x-notify-service/port"
-if [ -f "$PORT_FILE" ] && [ ! -L "$OLD_PROGRAM" ]; then
-    pid=$(sed -n 's/.*"pid":\([0-9][0-9]*\).*/\1/p' "$PORT_FILE")
+stop_installed_instance() { # $1=port file $2=expected executable
+    [ -f "$1" ] || return 0
+    pid=$(sed -n 's/.*"pid":\([0-9][0-9]*\).*/\1/p' "$1")
     if [ -n "$pid" ]; then
         running_program=$(readlink "/proc/$pid/exe" 2>/dev/null || true)
-        if [ "$running_program" = "$OLD_PROGRAM" ] ||
-            [ "$running_program" = "$OLD_PROGRAM (deleted)" ]; then
+        if [ "$running_program" = "$2" ] ||
+            [ "$running_program" = "$2 (deleted)" ]; then
             kill "$pid" 2>/dev/null || true
-            echo "已停止旧实例(pid $pid)"
+            attempts=0
+            while [ "$attempts" -lt 20 ]; do
+                running_program=$(readlink "/proc/$pid/exe" 2>/dev/null || true)
+                if [ "$running_program" != "$2" ] &&
+                    [ "$running_program" != "$2 (deleted)" ]; then
+                    echo "已停止旧实例(pid $pid)"
+                    return 0
+                fi
+                sleep 0.1
+                attempts=$((attempts + 1))
+            done
+            echo "实例仍在运行，安装中止(pid $pid)" >&2
+            return 1
         fi
     fi
+}
+if [ ! -L "$OLD_PROGRAM" ]; then
+    stop_installed_instance "$DATA_HOME/x-notify-service/port" "$OLD_PROGRAM"
 fi
+stop_installed_instance "$APP_DIR/port" "$PROGRAM"
 
 mkdir -p "$APP_DIR/bin" "$BIN_DIR" "$CONF_DIR"
 cp "$SRC_DIR/bin/x-notify-service" "$APP_DIR/bin/.x-notify-service.new"
@@ -67,7 +83,7 @@ fi
 ln -s "$PROGRAM" "$BIN_DIR/.x-notify-service.new.$$"
 mv -f "$BIN_DIR/.x-notify-service.new.$$" "$OLD_PROGRAM"
 
-# install 负责迁移旧 XDG 配置、状态和数据，并刷新自启/协议目标。
+# install 负责迁移旧 XDG 配置、状态和数据（含 XDG_STATE_HOME），并刷新自启/协议目标。
 "$PROGRAM" install
 
 if [ ! -f "$CONF_DIR/config.toml" ]; then
