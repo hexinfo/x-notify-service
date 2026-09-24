@@ -489,24 +489,27 @@ fn body_panel_style(background: Color) -> ContainerStyle {
 
 /// 标题行:各平台统一字号和字重;单行截断并垂直居中
 fn title_row(state: &State) -> Element<'_, Message> {
-    row![
-        container(
-            text(popup::elide_title(&state.title, state.size.width))
-                .size(TITLE_FONT_SIZE)
-                .font(TITLE_FONT)
-                .color(color(state.colors.header_text))
-                .wrapping(iced::widget::text::Wrapping::None)
-                .width(Length::Fill),
-        )
-        .padding(Padding {
-            top: 0.0,
-            bottom: 0.0,
-            left: popup::PAD_LEFT + state.slide,
-            right: popup::PAD_RIGHT,
-        })
+    let title = text(popup::elide_title(&state.title, state.size.width))
+        .size(TITLE_FONT_SIZE)
+        .font(TITLE_FONT)
+        .color(color(state.colors.header_text))
+        .wrapping(iced::widget::text::Wrapping::None)
+        .width(Length::Fill);
+    #[cfg(windows)]
+    let title = title
         .height(Length::Fill)
-        .align_y(iced::alignment::Vertical::Center)
-        .width(Length::Fill),
+        .align_y(iced::alignment::Vertical::Bottom);
+    row![
+        container(title)
+            .padding(Padding {
+                top: 0.0,
+                bottom: 0.0,
+                left: popup::PAD_LEFT + state.slide,
+                right: popup::PAD_RIGHT,
+            })
+            .height(Length::Fill)
+            .align_y(iced::alignment::Vertical::Center)
+            .width(Length::Fill),
         close_button(state.hover_close),
     ]
     .height(Length::Fill)
