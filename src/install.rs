@@ -3,13 +3,35 @@
 
 use crate::{autostart, ctl, protocol};
 
-/// install 子命令:注册自启动 + x-notify:// 协议(失败仅告警,不阻塞),
-/// 随后分离启动服务进程并立即返回,供安装器/脚本调用不阻塞。
+/// install 子命令:注册自启动 + x-notify:// 协议,随后分离启动并确认服务就绪。
 pub fn install() -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(target_os = "macos")]
-    if !old_macos_instance_stopped() {
-        return Err("无法确认旧版服务已停止;请先停止旧版服务".into());
+    {
+        let Some((old_data, old_logs)) = old_macos_dirs() else {
+            return Err("无法定位用户目录".into());
+        };
+        if old_port_running(&old_data) {
+            return Err("旧版服务仍在运行;请先停止旧版服务".into());
+        }
+        let mut old_lock = open_old_lock(&old_data)?;
+        let _guard = if let Some(lock) = old_lock.as_mut() {
+            Some(
+                lock.try_write()
+                    .map_err(|_error| "旧版服务仍在运行;请先停止旧版服务")?,
+            )
+        } else {
+            None
+        };
+        install_inner()?;
+        cleanup_old_macos_dirs(&old_data, &old_logs);
+        Ok(())
     }
+
+    #[cfg(not(target_os = "macos"))]
+    install_inner()
+}
+
+fn install_inner() -> Result<(), Box<dyn std::error::Error>> {
     autostart::enable()?;
     log::info!("已注册开机自启动");
     protocol::register()?;
@@ -33,8 +55,6 @@ pub fn install() -> Result<(), Box<dyn std::error::Error>> {
     if !ready {
         return Err("新版服务未在限定时间内就绪".into());
     }
-    #[cfg(target_os = "macos")]
-    cleanup_old_macos_dirs_after_start();
     println!("安装完成,服务已在后台启动");
     Ok(())
 }
@@ -66,43 +86,40 @@ fn old_macos_dirs() -> Option<(std::path::PathBuf, std::path::PathBuf)> {
 }
 
 #[cfg(target_os = "macos")]
-fn old_macos_instance_stopped() -> bool {
+fn open_old_lock(
+    old_data: &std::path::Path,
+) -> Result<Option<fd_lock::RwLock<std::fs::File>>, Box<dyn std::error::Error>> {
     use std::fs::OpenOptions;
-
-    let Some((old_data, old_logs)) = old_macos_dirs() else {
-        return false;
-    };
-    if !old_data.exists() && !old_logs.exists() {
-        return true;
-    }
-    let Ok(lock_file) = OpenOptions::new()
+    let lock_file = match OpenOptions::new()
         .read(true)
         .write(true)
         .open(old_data.join("instance.lock"))
-    else {
-        return false;
+    {
+        Ok(file) => file,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => return Err(e.into()),
     };
-    let mut lock = fd_lock::RwLock::new(lock_file);
-    lock.try_write().is_ok()
+    Ok(Some(fd_lock::RwLock::new(lock_file)))
 }
 
 #[cfg(target_os = "macos")]
-fn cleanup_old_macos_dirs_after_start() {
-    use std::fs::remove_dir_all;
-
-    let Some((old_data, old_logs)) = old_macos_dirs() else {
-        return;
+fn old_port_running(old_data: &std::path::Path) -> bool {
+    let Ok(text) = std::fs::read_to_string(old_data.join("port")) else {
+        return false;
     };
-    if !old_data.exists() && !old_logs.exists() {
-        return;
-    }
+    let Ok(record) = serde_json::from_str::<serde_json::Value>(&text) else {
+        return false;
+    };
+    let Some(port) = record["port"].as_u64().and_then(|p| u16::try_from(p).ok()) else {
+        return false;
+    };
+    matches!(ctl::probe_port(port), Some(ctl::Probe::Ours { .. }))
+}
 
-    if !old_macos_instance_stopped() {
-        log::warn!("无法确认旧版实例已停止,保留旧版目录");
-        return;
-    }
-
-    for path in [&old_data, &old_logs] {
+#[cfg(target_os = "macos")]
+fn cleanup_old_macos_dirs(old_data: &std::path::Path, old_logs: &std::path::Path) {
+    use std::fs::remove_dir_all;
+    for path in [old_data, old_logs] {
         if path.exists() {
             match remove_dir_all(path) {
                 Ok(()) => log::info!("已清理旧版目录: {}", path.display()),
@@ -155,5 +172,47 @@ mod tests {
                 version: "old".into()
             })
         ));
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn logs_only_without_legacy_lock_allows_install_preflight() {
+        let test_root = std::env::temp_dir().join(format!(
+            "x-notify-install-test-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let old_data = test_root.join("Application Support/x-notify-service");
+        let old_logs = test_root.join("Logs/x-notify-service");
+        std::fs::create_dir_all(&old_logs).unwrap();
+        assert!(super::open_old_lock(&old_data).unwrap().is_none());
+        assert!(!super::old_port_running(&old_data));
+        assert!(old_logs.exists());
+        std::fs::remove_dir_all(test_root).unwrap();
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn held_legacy_lock_refuses_second_owner_until_guard_drops() {
+        let old_data = std::env::temp_dir().join(format!(
+            "x-notify-install-lock-test-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&old_data).unwrap();
+        std::fs::File::create(old_data.join("instance.lock")).unwrap();
+        let mut first = super::open_old_lock(&old_data).unwrap().unwrap();
+        let guard = first.try_write().unwrap();
+        let mut second = super::open_old_lock(&old_data).unwrap().unwrap();
+        second.try_write().unwrap_err();
+        drop(guard);
+        let _new_guard = second.try_write().unwrap();
+        std::fs::remove_dir_all(old_data).unwrap();
     }
 }
