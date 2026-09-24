@@ -47,7 +47,9 @@ try {
     Invoke-Installer $Setup @('/S')
     Assert ((Get-Content $newConfig -Raw).Contains('# edited new config')) 'Existing new config was overwritten'
 
-    Invoke-Installer (Join-Path $newDir 'uninstall.exe') @('/S')
+    Invoke-Installer (Join-Path $newDir 'uninstall.exe') @('/S', "_?=$newDir")
+    Assert (-not (Test-Path (Join-Path $newDir "$app.exe"))) 'Fresh uninstall did not finish'
+    Assert (-not (Test-Path $newKey)) 'Fresh uninstall left new install registry key'
     New-Item -ItemType Directory -Path $oldDir -Force | Out-Null
     Copy-Item $ServiceExe (Join-Path $oldDir "$app.exe")
     Set-Content (Join-Path $oldDir 'config.toml') '# old installer config'
@@ -72,7 +74,9 @@ try {
     Assert (Test-Path $newPort) 'New port/data path did not survive old-data cleanup'
 
     # Compile a deterministic old uninstaller stub to exercise both exit paths.
-    Invoke-Installer (Join-Path $newDir 'uninstall.exe') @('/S')
+    Invoke-Installer (Join-Path $newDir 'uninstall.exe') @('/S', "_?=$newDir")
+    Assert (-not (Test-Path (Join-Path $newDir "$app.exe"))) 'Upgrade uninstall did not finish'
+    Assert (-not (Test-Path $newKey)) 'Upgrade uninstall left new install registry key'
     $stubSource = Join-Path $env:TEMP 'hexinfo-old-uninstall-stub.cs'
     $stubMarker = Join-Path $env:TEMP 'hexinfo-old-uninstall-ran.txt'
     $stubExe = Join-Path $oldDir 'uninstall.exe'
@@ -105,11 +109,15 @@ class Program {
     Assert (Test-Path (Join-Path $newDir "$app.exe")) 'New version missing after successful stub uninstall'
 
     # The directory page can select the old default path for a new installation.
-    Invoke-Installer (Join-Path $newDir 'uninstall.exe') @('/S')
+    Invoke-Installer (Join-Path $newDir 'uninstall.exe') @('/S', "_?=$newDir")
+    Assert (-not (Test-Path (Join-Path $newDir "$app.exe"))) 'Stub-case uninstall did not finish'
+    Assert (-not (Test-Path $newKey)) 'Stub-case uninstall left new install registry key'
     Invoke-Installer $Setup @('/S', "/D=$oldDir")
     Assert (Test-Path (Join-Path $oldDir "$app.exe")) 'Installer deleted its selected install directory'
     Assert ((Get-ItemProperty $newKey).InstallDir -eq $oldDir) 'Custom install path was not registered'
-    Invoke-Installer (Join-Path $oldDir 'uninstall.exe') @('/S')
+    Invoke-Installer (Join-Path $oldDir 'uninstall.exe') @('/S', "_?=$oldDir")
+    Assert (-not (Test-Path (Join-Path $oldDir "$app.exe"))) 'Old-path uninstall did not finish'
+    Assert (-not (Test-Path $newKey)) 'Old-path uninstall left new install registry key'
 
     $nestedDir = Join-Path $oldDir 'custom\nested'
     Invoke-Installer $Setup @('/S', "/D=$nestedDir")
@@ -117,10 +125,10 @@ class Program {
     Assert ((Get-ItemProperty $newKey).InstallDir -eq $nestedDir) 'Nested install path was not registered'
 } finally {
     if (Test-Path (Join-Path $newDir 'uninstall.exe')) {
-        Invoke-Installer (Join-Path $newDir 'uninstall.exe') @('/S')
+        Invoke-Installer (Join-Path $newDir 'uninstall.exe') @('/S', "_?=$newDir")
     }
     if ($nestedDir -and (Test-Path (Join-Path $nestedDir 'uninstall.exe'))) {
-        Invoke-Installer (Join-Path $nestedDir 'uninstall.exe') @('/S')
+        Invoke-Installer (Join-Path $nestedDir 'uninstall.exe') @('/S', "_?=$nestedDir")
     }
     Remove-Item Env:HEXINFO_TEST_OLD_UNINSTALL_MARKER -ErrorAction SilentlyContinue
     Remove-Item Env:HEXINFO_TEST_OLD_UNINSTALL_EXIT -ErrorAction SilentlyContinue
