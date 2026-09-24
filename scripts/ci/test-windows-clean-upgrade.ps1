@@ -75,6 +75,9 @@ try {
         throw $originalError
     }
     Assert (Test-Path (Join-Path $newDir "$app.exe")) 'Fresh install missing executable'
+    $runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
+    Assert (Test-Path $runKey) 'Fresh install did not create the Run key'
+    Assert ((Get-ItemPropertyValue -Path $runKey -Name $app) -like "*$newDir*") 'Fresh install did not register autostart'
     Assert ((Get-ItemProperty $newKey).InstallDir -eq $newDir) 'New install registry path is wrong'
     Assert ((Get-ItemProperty $uninstallKey).InstallLocation -eq $newDir) 'Uninstall registry path is wrong'
 

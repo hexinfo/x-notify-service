@@ -12,12 +12,10 @@ const SERVE_ARG: &str = "serve";
 #[cfg(windows)]
 pub fn enable() -> Result<(), Box<dyn std::error::Error>> {
     use winreg::RegKey;
-    use winreg::enums::{HKEY_CURRENT_USER, KEY_SET_VALUE};
+    use winreg::enums::HKEY_CURRENT_USER;
     let exe = std::env::current_exe()?;
-    let run = RegKey::predef(HKEY_CURRENT_USER).open_subkey_with_flags(
-        "Software\\Microsoft\\Windows\\CurrentVersion\\Run",
-        KEY_SET_VALUE,
-    )?;
+    let (run, _) = RegKey::predef(HKEY_CURRENT_USER)
+        .create_subkey("Software\\Microsoft\\Windows\\CurrentVersion\\Run")?;
     run.set_value(
         crate::config::APP_DIR_NAME,
         &format!("\"{}\" {SERVE_ARG}", exe.display()),
