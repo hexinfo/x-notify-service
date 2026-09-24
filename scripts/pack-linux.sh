@@ -88,7 +88,7 @@ assemble() {
     local out="dist/${pkg}"
     assert_glibc "$bin"
     rm -rf "$out"
-    mkdir -p "$out/bin" "$out/config"
+    mkdir -p "$out/bin" "$out/config" "$out/icons"
     cp "$bin" "$out/bin/x-notify-service"
     cp scripts/templates/config.toml "$out/config/"
     cp scripts/templates/install-linux.sh "$out/install.sh"

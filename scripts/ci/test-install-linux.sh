@@ -11,14 +11,15 @@ XDG_CONFIG_HOME=$HOME/'config with spaces'
 XDG_STATE_HOME=$HOME/'state with spaces'
 export HOME XDG_DATA_HOME XDG_CONFIG_HOME XDG_STATE_HOME
 PKG=$TMP/package
-mkdir -p "$PKG/bin" "$PKG/config" "$PKG/icons/hicolor" "$HOME/.local/bin" "$XDG_CONFIG_HOME/x-notify-service" "$XDG_DATA_HOME/x-notify-service" "$XDG_STATE_HOME/x-notify-service"
+mkdir -p "$PKG/bin" "$PKG/config" "$PKG/icons" "$HOME/.local/bin" "$XDG_CONFIG_HOME/x-notify-service" "$XDG_DATA_HOME/x-notify-service" "$XDG_STATE_HOME/x-notify-service"
+cp -R "$SCRIPT_DIR/../../assets/icons/hicolor" "$PKG/icons/"
+[ -f "$PKG/icons/hicolor/x-notify-service-32.png" ]
 cp "$INSTALLER" "$PKG/install.sh"
 chmod +x "$PKG/install.sh"
 printf 'new config\n' > "$PKG/config/config.toml"
 printf 'sdk\n' > "$PKG/sdk.js"
 printf 'umd\n' > "$PKG/sdk.umd.js"
 printf 'manual\n' > "$PKG/sdk-使用手册.md"
-printf 'png\n' > "$PKG/icons/hicolor/x-notify-service-32.png"
 printf 'old config\n' > "$XDG_CONFIG_HOME/x-notify-service/config.toml"
 printf 'old data\n' > "$XDG_DATA_HOME/x-notify-service/port"
 printf 'old log\n' > "$XDG_STATE_HOME/x-notify-service/service.log"
