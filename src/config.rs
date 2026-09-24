@@ -137,19 +137,19 @@ pub fn default_log_dir() -> PathBuf {
         // ~/Library/Logs
         dirs::home_dir().map_or_else(
             || PathBuf::from(".").join("logs"),
-            |h| h.join("Library").join("Logs").join(APP_DIR_NAME),
+            |h| private_dir(h.join("Library").join("Logs")),
         )
     } else if cfg!(windows) {
         // %LOCALAPPDATA%
         dirs::data_local_dir().map_or_else(
             || PathBuf::from(".").join("logs"),
-            |d| d.join(APP_DIR_NAME).join("logs"),
+            |d| private_dir(d).join("logs"),
         )
     } else {
         // XDG: ~/.local/state
         dirs::state_dir().map_or_else(
             || PathBuf::from(".").join("logs"),
-            |d| d.join(APP_DIR_NAME).join("logs"),
+            |d| private_dir(d).join("logs"),
         )
     }
 }
@@ -158,10 +158,21 @@ pub fn default_log_dir() -> PathBuf {
 fn user_config_path() -> Option<PathBuf> {
     dirs::config_local_dir()
         .or_else(dirs::config_dir)
-        .map(|d| d.join(APP_DIR_NAME).join("config.toml"))
+        .map(|d| private_dir(d).join("config.toml"))
 }
 
 pub const APP_DIR_NAME: &str = "x-notify-service";
+pub const ORG_DIR_NAME: &str = "Hexinfo";
+
+#[allow(clippy::needless_pass_by_value)]
+pub fn private_dir(base: PathBuf) -> PathBuf {
+    base.join(ORG_DIR_NAME).join(APP_DIR_NAME)
+}
+
+#[allow(clippy::needless_pass_by_value)]
+pub fn legacy_private_dir(base: PathBuf) -> PathBuf {
+    base.join(APP_DIR_NAME)
+}
 
 pub fn resolve(cli: &Cli) -> Config {
     let file = load_file_config(cli.config.as_deref());
@@ -224,5 +235,25 @@ fn candidates(explicit: Option<&std::path::Path>) -> Vec<PathBuf> {
     if let Some(p) = user_config_path() {
         v.push(p);
     }
+    if let Some(p) = dirs::config_local_dir().or_else(dirs::config_dir) {
+        v.push(legacy_private_dir(p).join("config.toml"));
+    }
     v
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn private_paths_include_organization_without_changing_app_name() {
+        let base = std::path::PathBuf::from("root");
+        assert_eq!(
+            super::private_dir(base.clone()),
+            base.join("Hexinfo/x-notify-service")
+        );
+        assert_eq!(
+            super::legacy_private_dir(base.clone()),
+            base.join("x-notify-service")
+        );
+        assert_eq!(super::APP_DIR_NAME, "x-notify-service");
+    }
 }

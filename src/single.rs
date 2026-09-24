@@ -4,9 +4,49 @@ use std::path::PathBuf;
 /// 用户级数据目录(日志 port 文件等)
 pub fn data_dir() -> PathBuf {
     dirs::data_local_dir().map_or_else(
-        || std::env::temp_dir().join(crate::config::APP_DIR_NAME),
-        |d| d.join(crate::config::APP_DIR_NAME),
+        || crate::config::private_dir(std::env::temp_dir()),
+        crate::config::private_dir,
     )
+}
+
+pub fn legacy_data_dir() -> PathBuf {
+    dirs::data_local_dir().map_or_else(
+        || crate::config::legacy_private_dir(std::env::temp_dir()),
+        crate::config::legacy_private_dir,
+    )
+}
+
+pub fn legacy_is_locked() -> bool {
+    #[cfg(target_os = "linux")]
+    let path = std::env::var_os("XDG_RUNTIME_DIR").map_or_else(
+        || legacy_data_dir().join("instance.lock"),
+        |rt| PathBuf::from(rt).join(format!("{}.lock", crate::config::APP_DIR_NAME)),
+    );
+    #[cfg(not(target_os = "linux"))]
+    let path = legacy_data_dir().join("instance.lock");
+    if !path.exists() {
+        return false;
+    }
+    File::options()
+        .read(true)
+        .write(true)
+        .open(path)
+        .is_ok_and(|file| fd_lock::RwLock::new(file).try_write().is_err())
+}
+
+#[cfg(target_os = "linux")]
+pub fn current_instance_is_running() -> bool {
+    let Some(info) = read_port_file() else {
+        return false;
+    };
+    is_current_executable_pid(info.pid)
+}
+
+#[cfg(target_os = "linux")]
+fn is_current_executable_pid(pid: u32) -> bool {
+    let running = std::fs::read_link(format!("/proc/{pid}/exe"));
+    let current = std::env::current_exe();
+    running.is_ok_and(|running| current.is_ok_and(|current| running == current))
 }
 
 /// 单实例锁文件位置:Linux 优先 `XDG_RUNTIME_DIR`,其余平台放数据目录
@@ -77,4 +117,14 @@ pub fn write_port_file(port: u16) {
     }
     let content = format!("{{\"port\":{port},\"pid\":{}}}\n", std::process::id());
     let _ = std::fs::write(dir.join("port"), content);
+}
+
+#[cfg(test)]
+mod tests {
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn current_process_executable_is_recognized() {
+        assert!(super::is_current_executable_pid(std::process::id()));
+        assert!(!super::is_current_executable_pid(u32::MAX));
+    }
 }

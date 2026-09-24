@@ -10,6 +10,7 @@ mod install;
 mod logging;
 mod markdown_body;
 mod notify;
+mod path_migration;
 mod protocol;
 mod screen;
 mod send;
@@ -21,9 +22,27 @@ mod windows_env;
 
 use clap::Parser as _;
 
+#[allow(clippy::print_stderr)]
 fn main() {
     windows_env::attach_parent_console();
     let cli = config::Cli::parse();
+    if matches!(
+        &cli.cmd,
+        Some(config::Command::Install | config::Command::Serve)
+    ) || (cli.cmd.is_none() && cli.url_arg.is_some())
+    {
+        match path_migration::migrate_private_dirs() {
+            Ok(report) => {
+                for conflict in report.conflicts {
+                    eprintln!("Hexinfo 路径迁移冲突，旧文件已保留: {}", conflict.display());
+                }
+            }
+            Err(error) => {
+                eprintln!("Hexinfo 路径迁移失败，旧目录已保留: {error}");
+                std::process::exit(1);
+            }
+        }
+    }
     let cfg = config::resolve(&cli);
     // 文件日志仅服务进程需要;一次性 CLI 命令不建文件(避免空日志),输出走终端
     let serve_mode = match &cli.cmd {

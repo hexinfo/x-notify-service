@@ -1,4 +1,4 @@
-# x-notify-service 默认配置模板(安装时复制到 ~/.config/x-notify-service/config.toml)
+# x-notify-service 默认配置模板(安装时复制到 ~/.config/Hexinfo/x-notify-service/config.toml)
 # 优先级:命令行参数 > 二进制同目录 config.toml > 本文件所在的用户配置目录
 
 # 监听端口(被占用时自动向后探测 10 个,SDK 会同步探测该区间)
@@ -8,9 +8,9 @@
 # log_level = "info"
 
 # 日志目录(默认各平台标准位置,按天滚动保留 7 天)
-# Linux:   ~/.local/state/x-notify-service/logs
-# macOS:   ~/Library/Logs/x-notify-service
-# Windows: %LOCALAPPDATA%\x-notify-service\logs
+# Linux:   ~/.local/state/Hexinfo/x-notify-service/logs
+# macOS:   ~/Library/Logs/Hexinfo/x-notify-service
+# Windows: %LOCALAPPDATA%\Hexinfo\x-notify-service\logs
 # log_dir = ""
 
 
