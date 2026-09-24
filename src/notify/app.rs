@@ -10,7 +10,9 @@ use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::mpsc::{Receiver, SyncSender, sync_channel};
 use std::time::{Duration, Instant};
 
-use iced::font::{Family, Weight};
+use iced::font::Family;
+#[cfg(not(windows))]
+use iced::font::Weight;
 use iced::widget::container::Style as ContainerStyle;
 use iced::widget::{Column, container, markdown, mouse_area, row, text};
 use iced::{Color, Element, Font, Length, Padding, Subscription, Task, Theme, daemon, window};
@@ -110,6 +112,13 @@ const UI_FONT: Font = Font {
 
 const TITLE_FONT_SIZE: f32 = 16.0;
 
+#[cfg(windows)]
+const TITLE_FONT: Font = Font {
+    family: Family::Name("Microsoft YaHei UI Bold"),
+    ..Font::DEFAULT
+};
+
+#[cfg(not(windows))]
 const TITLE_FONT: Font = Font {
     family: Family::Name(UI_FONT_FAMILY),
     weight: Weight::Bold,
@@ -656,9 +665,26 @@ mod tests {
 
     #[test]
     fn title_typography_is_consistent() {
+        assert!((super::TITLE_FONT_SIZE - 16.0).abs() < f32::EPSILON);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_title_requests_bold_face_by_name() {
+        use iced::font::{Family, Weight};
+
+        assert_eq!(
+            super::TITLE_FONT.family,
+            Family::Name("Microsoft YaHei UI Bold")
+        );
+        assert_eq!(super::TITLE_FONT.weight, Weight::Normal);
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn other_platform_titles_remain_bold() {
         use iced::font::Weight;
 
-        assert!((super::TITLE_FONT_SIZE - 16.0).abs() < f32::EPSILON);
         assert_eq!(super::TITLE_FONT.weight, Weight::Bold);
     }
 
