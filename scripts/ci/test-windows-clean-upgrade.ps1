@@ -112,6 +112,17 @@ class Program {
     Invoke-Installer (Join-Path $newDir 'uninstall.exe') @('/S', "_?=$newDir")
     Assert (-not (Test-Path (Join-Path $newDir "$app.exe"))) 'Stub-case uninstall did not finish'
     Assert (-not (Test-Path $newKey)) 'Stub-case uninstall left new install registry key'
+
+    # An old executable that exists but cannot launch must stop the upgrade.
+    New-Item -ItemType Directory -Path $oldDir -Force | Out-Null
+    Set-Content (Join-Path $oldDir "$app.exe") 'not a Windows executable'
+    $rejected = $false
+    try { Invoke-Installer $Setup @('/S') } catch { $rejected = $true }
+    Assert $rejected 'Installer accepted an unlaunchable old executable'
+    Assert (Test-Path (Join-Path $oldDir "$app.exe")) 'Failed old uninstall removed the old program'
+    Assert (-not (Test-Path (Join-Path $newDir "$app.exe"))) 'New version installed after old launch failure'
+    Remove-Item $oldDir -Recurse -Force
+
     Invoke-Installer $Setup @('/S', "/D=$oldDir")
     Assert (Test-Path (Join-Path $oldDir "$app.exe")) 'Installer deleted its selected install directory'
     Assert ((Get-ItemProperty $newKey).InstallDir -eq $oldDir) 'Custom install path was not registered'
@@ -123,6 +134,16 @@ class Program {
     Invoke-Installer $Setup @('/S', "/D=$nestedDir")
     Assert (Test-Path (Join-Path $nestedDir "$app.exe")) 'Installer deleted a nested selected install directory'
     Assert ((Get-ItemProperty $newKey).InstallDir -eq $nestedDir) 'Nested install path was not registered'
+    Invoke-Installer (Join-Path $nestedDir 'uninstall.exe') @('/S', "_?=$nestedDir")
+    Assert (-not (Test-Path (Join-Path $nestedDir "$app.exe"))) 'Nested uninstall did not finish'
+    Assert (-not (Test-Path $newKey)) 'Nested uninstall left new install registry key'
+
+    $dataNestedDir = Join-Path $dataDir 'custom\nested'
+    Invoke-Installer $Setup @('/S', "/D=$dataNestedDir")
+    foreach ($file in @("$app.exe", 'config.toml', 'sdk.js', 'sdk.umd.js', 'sdk-manual.md', 'uninstall.exe')) {
+        Assert (Test-Path (Join-Path $dataNestedDir $file)) "Old-data cleanup deleted installed file: $file"
+    }
+    Assert ((Get-ItemProperty $newKey).InstallDir -eq $dataNestedDir) 'Old-data nested install path was not registered'
 } finally {
     if (Test-Path (Join-Path $newDir 'uninstall.exe')) {
         Invoke-Installer (Join-Path $newDir 'uninstall.exe') @('/S', "_?=$newDir")
@@ -130,10 +151,14 @@ class Program {
     if ($nestedDir -and (Test-Path (Join-Path $nestedDir 'uninstall.exe'))) {
         Invoke-Installer (Join-Path $nestedDir 'uninstall.exe') @('/S', "_?=$nestedDir")
     }
+    if ($dataNestedDir -and (Test-Path (Join-Path $dataNestedDir 'uninstall.exe'))) {
+        Invoke-Installer (Join-Path $dataNestedDir 'uninstall.exe') @('/S', "_?=$dataNestedDir")
+    }
     Remove-Item Env:HEXINFO_TEST_OLD_UNINSTALL_MARKER -ErrorAction SilentlyContinue
     Remove-Item Env:HEXINFO_TEST_OLD_UNINSTALL_EXIT -ErrorAction SilentlyContinue
     if ($stubSource) { Remove-Item $stubSource -ErrorAction SilentlyContinue }
     if ($stubMarker) { Remove-Item $stubMarker -ErrorAction SilentlyContinue }
     Remove-Item $oldDir -Recurse -Force -ErrorAction SilentlyContinue
+    Remove-Item $dataDir -Recurse -Force -ErrorAction SilentlyContinue
     Remove-Item $oldKey -Recurse -Force -ErrorAction SilentlyContinue
 }

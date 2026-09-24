@@ -47,7 +47,12 @@ Section "安装"
     StrCmp $OldInstDir "$INSTDIR" old_done
     StrCmp $InstallPrefix "$OldInstDir\" old_done
         IfFileExists "$OldInstDir\uninstall.exe" 0 old_exe
+        ClearErrors
         ExecWait '"$OldInstDir\uninstall.exe" /S _?=$OldInstDir' $0
+        ${If} ${Errors}
+            SetErrorLevel 1
+            Abort "无法启动旧版卸载器，安装已停止。"
+        ${EndIf}
         ${If} $0 != 0
             SetErrorLevel 1
             Abort "旧版卸载失败($0)，安装已停止。"
@@ -55,7 +60,12 @@ Section "安装"
         Goto old_done
         old_exe:
         IfFileExists "$OldInstDir\${APPNAME}.exe" 0 old_done
+        ClearErrors
         ExecWait '"$OldInstDir\${APPNAME}.exe" uninstall' $0
+        ${If} ${Errors}
+            SetErrorLevel 1
+            Abort "无法启动旧版程序卸载命令，安装已停止。"
+        ${EndIf}
         ${If} $0 != 0
             SetErrorLevel 1
             Abort "旧版服务注销失败($0)，安装已停止。"
@@ -87,7 +97,12 @@ Section "安装"
     WriteRegDWORD HKCU "${UNINSTKEY}" "NoRepair" 1
 
     ; 注册自启动和协议；install 会分离服务进程并立即返回。
+    ClearErrors
     ExecWait '"$INSTDIR\${APPNAME}.exe" install' $0
+    ${If} ${Errors}
+        SetErrorLevel 1
+        Abort "无法启动新版程序安装命令，安装已停止。"
+    ${EndIf}
     ${If} $0 != 0
         SetErrorLevel 1
         Abort "新版服务注册失败($0)，安装已停止。"
@@ -97,7 +112,12 @@ Section "安装"
     StrCmp $InstallPrefix "$OldInstDir\" skip_old_program_cleanup
     RMDir /r "$LOCALAPPDATA\Programs\${APPNAME}"
     skip_old_program_cleanup:
+    StrLen $OldDirPrefix "$LOCALAPPDATA\${APPNAME}\"
+    StrCpy $InstallPrefix $INSTDIR $OldDirPrefix
+    StrCmp $INSTDIR "$LOCALAPPDATA\${APPNAME}" skip_old_data_cleanup
+    StrCmp $InstallPrefix "$LOCALAPPDATA\${APPNAME}\" skip_old_data_cleanup
     RMDir /r "$LOCALAPPDATA\${APPNAME}"
+    skip_old_data_cleanup:
     DeleteRegKey HKCU "${OLDAPPKEY}"
     DetailPrint "安装完成。SDK:安装目录内 sdk.js / sdk.umd.js / sdk-manual.md"
     DetailPrint "快速测试:浏览器打开 http://127.0.0.1:17320/"
