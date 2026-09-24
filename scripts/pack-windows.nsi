@@ -34,22 +34,22 @@ ShowUninstDetails show
 !insertmacro MUI_LANGUAGE "SimpChinese"
 
 Var OldInstDir
+Var OldDirPrefix
+Var InstallPrefix
 
 Section "安装"
     SetShellVarContext current
 
-    ; 仅在旧版程序确实存在时卸载旧位置。旧版卸载器会清理自启动和协议注册。
-    ReadRegStr $OldInstDir HKCU "${OLDAPPKEY}" "InstallDir"
-    ${If} $OldInstDir == ""
-        ReadRegStr $OldInstDir HKCU "${UNINSTKEY}" "InstallLocation"
-    ${EndIf}
-    ${If} $OldInstDir == ""
-        StrCpy $OldInstDir "$LOCALAPPDATA\Programs\${APPNAME}"
-    ${EndIf}
+    ; 旧版可执行文件只从固定旧默认目录启动，不信任 HKCU 中可写的路径。
+    StrCpy $OldInstDir "$LOCALAPPDATA\Programs\${APPNAME}"
+    StrLen $OldDirPrefix "$OldInstDir\"
+    StrCpy $InstallPrefix $INSTDIR $OldDirPrefix
     StrCmp $OldInstDir "$INSTDIR" old_done
+    StrCmp $InstallPrefix "$OldInstDir\" old_done
         IfFileExists "$OldInstDir\uninstall.exe" 0 old_exe
         ExecWait '"$OldInstDir\uninstall.exe" /S _?=$OldInstDir' $0
         ${If} $0 != 0
+            SetErrorLevel 1
             Abort "旧版卸载失败($0)，安装已停止。"
         ${EndIf}
         Goto old_done
@@ -57,6 +57,7 @@ Section "安装"
         IfFileExists "$OldInstDir\${APPNAME}.exe" 0 old_done
         ExecWait '"$OldInstDir\${APPNAME}.exe" uninstall' $0
         ${If} $0 != 0
+            SetErrorLevel 1
             Abort "旧版服务注销失败($0)，安装已停止。"
         ${EndIf}
         old_done:
@@ -88,10 +89,12 @@ Section "安装"
     ; 注册自启动和协议；install 会分离服务进程并立即返回。
     ExecWait '"$INSTDIR\${APPNAME}.exe" install' $0
     ${If} $0 != 0
+        SetErrorLevel 1
         Abort "新版服务注册失败($0)，安装已停止。"
     ${EndIf}
     ; 新版完成后只清理两个固定的旧目录，绝不按注册表路径递归删除自定义目录。
     StrCmp $INSTDIR "$LOCALAPPDATA\Programs\${APPNAME}" skip_old_program_cleanup
+    StrCmp $InstallPrefix "$OldInstDir\" skip_old_program_cleanup
     RMDir /r "$LOCALAPPDATA\Programs\${APPNAME}"
     skip_old_program_cleanup:
     RMDir /r "$LOCALAPPDATA\${APPNAME}"
