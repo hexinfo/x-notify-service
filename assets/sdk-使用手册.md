@@ -1,6 +1,6 @@
 # x-notify-service JS SDK 使用手册
 
-浏览器页面 → 本机右下角弹窗通知。本手册与 `sdk.js` 随安装包发布。
+浏览器页面 → 本机右下角弹窗通知。本手册与 `sdk.js`、`sdk.umd.js` 随安装包发布。
 
 ## 1. 环境要求
 
@@ -9,6 +9,11 @@
 - Linux 发行包要求 glibc ≥ 2.28，并依赖系统的 XCB 与 xkbcommon 动态库；Debian/Ubuntu 可安装 `libxcb1 libxkbcommon0 libxkbcommon-x11-0`。自绘弹窗还需要可用的图形驱动。
 
 ## 2. 引入方式
+
+两份文件由同一套源码构建，功能完全相同，只是模块格式不同；单个项目按接入方式选择其中一份即可，无需同时加载：
+
+- `sdk.js`：ES Module，供原生 ESM 或现代构建工具使用。
+- `sdk.umd.js`：独立完整的 UMD 产物，已包含全部 SDK 逻辑，不依赖 `sdk.js`；支持 AMD/RequireJS 和普通 `<script>`。
 
 把 `sdk.js` 拷贝进你的项目（与页面同目录或任意静态路径），以 ES Module 引入：
 
@@ -19,7 +24,7 @@
 </script>
 ```
 
-不支持 ESM 的老项目用 `sdk.umd.js`（UMD 格式，兼容 RequireJS 等 AMD 加载器与普通 `<script>` 标签）：
+不支持 ESM 的老项目只需引入 `sdk.umd.js`：
 
 ```html
 <!-- AMD(RequireJS):文件不在页面同目录时,先配 paths 别名(值不带 .js 后缀) -->

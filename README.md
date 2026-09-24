@@ -66,7 +66,7 @@ await svc.notify({ title: '工单提醒', body: '**紧急**工单\n\n第二行' 
 const svc = createNotifyService({ token: '与服务端 config.toml 一致' })
 ```
 
-ESM 主产物 + UMD 兼容产物(`sdk.umd.js`,AMD 加载器/普通 script 标签),浏览器基线 Chrome 87;完整 API 见发行包内 `sdk-使用手册.md`。开发:`cd sdk/js && pnpm install && pnpm build`,演示页 `pnpm demo`。
+SDK 提供同源码的两种独立产物，单个项目任选其一，无需同时加载：`sdk.js` 是 ESM；`sdk.umd.js` 是包含全部逻辑的完整 UMD 文件，不依赖 `sdk.js`，支持 AMD/RequireJS 和普通 script 标签。浏览器基线 Chrome 87；完整 API 见发行包内 `sdk-使用手册.md`。开发：`cd sdk/js && pnpm install && pnpm build`，演示页 `pnpm demo`。
 
 ## 已知限制
 
