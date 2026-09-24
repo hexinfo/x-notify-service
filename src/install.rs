@@ -13,7 +13,7 @@ pub fn install() -> Result<(), Box<dyn std::error::Error>> {
         if old_port_running(&old_data) {
             return Err("旧版服务仍在运行;请先停止旧版服务".into());
         }
-        let mut old_lock = open_old_lock(&old_data)?;
+        let mut old_lock = open_old_lock(&old_data, &old_logs)?;
         let _guard = if let Some(lock) = old_lock.as_mut() {
             Some(
                 lock.try_write()
@@ -88,17 +88,30 @@ fn old_macos_dirs() -> Option<(std::path::PathBuf, std::path::PathBuf)> {
 #[cfg(target_os = "macos")]
 fn open_old_lock(
     old_data: &std::path::Path,
+    old_logs: &std::path::Path,
 ) -> Result<Option<fd_lock::RwLock<std::fs::File>>, Box<dyn std::error::Error>> {
     use std::fs::OpenOptions;
-    let lock_file = match OpenOptions::new()
+    if !old_data.exists() && !old_logs.exists() {
+        return Ok(None);
+    }
+    if let Ok(meta) = std::fs::symlink_metadata(old_data)
+        && (meta.file_type().is_symlink() || !meta.is_dir())
+    {
+        return Err("旧版数据目录不是普通目录".into());
+    }
+    std::fs::create_dir_all(old_data)?;
+    let lock_path = old_data.join("instance.lock");
+    if let Ok(meta) = std::fs::symlink_metadata(&lock_path)
+        && (meta.file_type().is_symlink() || !meta.is_file())
+    {
+        return Err("旧版实例锁不是普通文件".into());
+    }
+    let lock_file = OpenOptions::new()
         .read(true)
         .write(true)
-        .open(old_data.join("instance.lock"))
-    {
-        Ok(file) => file,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-        Err(e) => return Err(e.into()),
-    };
+        .create(true)
+        .truncate(false)
+        .open(lock_path)?;
     Ok(Some(fd_lock::RwLock::new(lock_file)))
 }
 
@@ -188,9 +201,15 @@ mod tests {
         let old_data = test_root.join("Application Support/x-notify-service");
         let old_logs = test_root.join("Logs/x-notify-service");
         std::fs::create_dir_all(&old_logs).unwrap();
-        assert!(super::open_old_lock(&old_data).unwrap().is_none());
+        let mut lock = super::open_old_lock(&old_data, &old_logs).unwrap().unwrap();
+        let guard = lock.try_write().unwrap();
+        let mut competitor = super::open_old_lock(&old_data, &old_logs).unwrap().unwrap();
+        competitor.try_write().unwrap_err();
         assert!(!super::old_port_running(&old_data));
         assert!(old_logs.exists());
+        drop(guard);
+        let competitor_guard = competitor.try_write().unwrap();
+        drop(competitor_guard);
         std::fs::remove_dir_all(test_root).unwrap();
     }
 
@@ -207,9 +226,10 @@ mod tests {
         ));
         std::fs::create_dir_all(&old_data).unwrap();
         std::fs::File::create(old_data.join("instance.lock")).unwrap();
-        let mut first = super::open_old_lock(&old_data).unwrap().unwrap();
+        let old_logs = old_data.with_file_name("old-logs");
+        let mut first = super::open_old_lock(&old_data, &old_logs).unwrap().unwrap();
         let guard = first.try_write().unwrap();
-        let mut second = super::open_old_lock(&old_data).unwrap().unwrap();
+        let mut second = super::open_old_lock(&old_data, &old_logs).unwrap().unwrap();
         second.try_write().unwrap_err();
         drop(guard);
         let _new_guard = second.try_write().unwrap();
