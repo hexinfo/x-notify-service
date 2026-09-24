@@ -271,6 +271,11 @@ fn embedded_demo_page_accessible() {
         "body 前 80: {}",
         &body[..80.min(body.len())]
     );
+    assert!(
+        body.contains("<textarea id=\"inp-body\">待办通知 **1** 条\n\n15:21:05</textarea>"),
+        "正文输入应支持真实换行"
+    );
+    assert!(!body.contains("<input id=\"inp-body\""));
 }
 
 #[test]
