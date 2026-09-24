@@ -6,15 +6,44 @@ use std::ptr;
 
 use windows_sys::Win32::Foundation::RECT;
 use windows_sys::Win32::Graphics::Gdi::{CreateRoundRectRgn, DeleteObject, SetWindowRgn};
-use windows_sys::Win32::System::Threading::GetCurrentProcessId;
+use windows_sys::Win32::System::Threading::{GetCurrentProcessId, GetCurrentThreadId};
 use windows_sys::Win32::UI::HiDpi::GetDpiForWindow;
+use windows_sys::Win32::UI::Shell::{DefSubclassProc, RemoveWindowSubclass, SetWindowSubclass};
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     FindWindowW, GWL_STYLE, GetWindowLongW, GetWindowRect, GetWindowThreadProcessId,
     SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SetWindowLongW,
-    SetWindowPos, WS_CAPTION, WS_SYSMENU,
+    SetWindowPos, WM_NCACTIVATE, WM_NCDESTROY, WM_NCPAINT, WS_CAPTION, WS_SYSMENU,
 };
 
 use super::popup;
+
+const SUBCLASS_ID: usize = 1;
+
+unsafe extern "system" fn popup_subclass(
+    hwnd: windows_sys::Win32::Foundation::HWND,
+    message: u32,
+    wparam: windows_sys::Win32::Foundation::WPARAM,
+    lparam: windows_sys::Win32::Foundation::LPARAM,
+    _: usize,
+    _: usize,
+) -> windows_sys::Win32::Foundation::LRESULT {
+    match message {
+        // 仍交给 winit 处理激活状态,但不让 DefWindowProc 重绘原生标题栏。
+        // SAFETY: hwnd/message/参数来自当前窗口的 Win32 回调。
+        WM_NCACTIVATE => unsafe { DefSubclassProc(hwnd, message, wparam, -1) },
+        WM_NCPAINT => 0,
+        WM_NCDESTROY => {
+            // SAFETY: 在窗口销毁回调中移除当前窗口的当前子类过程。
+            unsafe {
+                RemoveWindowSubclass(hwnd, Some(popup_subclass), SUBCLASS_ID);
+            }
+            // SAFETY: 将原始销毁消息交给下一层窗口过程。
+            unsafe { DefSubclassProc(hwnd, message, wparam, lparam) }
+        }
+        // SAFETY: 未拦截的消息与原参数交给下一层窗口过程。
+        _ => unsafe { DefSubclassProc(hwnd, message, wparam, lparam) },
+    }
+}
 
 pub fn apply() {
     let title: Vec<u16> = popup::WINDOW_TITLE.encode_utf16().chain([0]).collect();
@@ -26,11 +55,21 @@ pub fn apply() {
 
     let mut owner = 0;
     // SAFETY: hwnd 由 FindWindowW 返回,owner 为有效输出指针。
-    unsafe {
-        GetWindowThreadProcessId(hwnd, &raw mut owner);
-    }
+    let thread = unsafe { GetWindowThreadProcessId(hwnd, &raw mut owner) };
     // SAFETY: 无参数 Win32 查询;确保不会裁切同名的其他进程窗口。
     if owner != unsafe { GetCurrentProcessId() } {
+        return;
+    }
+
+    // SetWindowSubclass 必须由创建窗口的线程调用;apply 由 iced 窗口事件触发。
+    // SAFETY: 无参数 Win32 当前线程查询。
+    if thread != unsafe { GetCurrentThreadId() } {
+        log::warn!("无法在其他线程修正 Windows 弹窗标题栏");
+        return;
+    }
+    // SAFETY: hwnd 属于当前线程;相同回调/id 重复注册是幂等的,销毁时主动移除。
+    if unsafe { SetWindowSubclass(hwnd, Some(popup_subclass), SUBCLASS_ID, 0) } == 0 {
+        log::warn!("禁止 Windows 弹窗非客户区重绘失败");
         return;
     }
 
