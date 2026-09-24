@@ -9,7 +9,9 @@ use windows_sys::Win32::Graphics::Gdi::{CreateRoundRectRgn, DeleteObject, SetWin
 use windows_sys::Win32::System::Threading::GetCurrentProcessId;
 use windows_sys::Win32::UI::HiDpi::GetDpiForWindow;
 use windows_sys::Win32::UI::WindowsAndMessaging::{
-    FindWindowW, GetWindowRect, GetWindowThreadProcessId,
+    FindWindowW, GWL_STYLE, GetWindowLongW, GetWindowRect, GetWindowThreadProcessId,
+    SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SetWindowLongW,
+    SetWindowPos, WS_CAPTION, WS_SYSMENU,
 };
 
 use super::popup;
@@ -30,6 +32,34 @@ pub fn apply() {
     // SAFETY: 无参数 Win32 查询;确保不会裁切同名的其他进程窗口。
     if owner != unsafe { GetCurrentProcessId() } {
         return;
+    }
+
+    // winit 的无框窗口仍保留 WS_CAPTION,仅在 WM_NCCALCSIZE 中隐藏它。
+    // SetWindowRgn 后 Windows 失焦重绘非客户区时会露出原生标题栏。
+    // 真正去掉标题栏样式,避免激活状态改变时再次绘制。
+    // SAFETY: hwnd 已校验属于本进程;读取/修改的是该窗口的样式。
+    let style = unsafe { GetWindowLongW(hwnd, GWL_STYLE) };
+    let frameless = style & (!(WS_CAPTION | WS_SYSMENU)).cast_signed();
+    if style != frameless {
+        // SAFETY: hwnd 属于本进程,仅清除该窗口的标题栏样式。
+        unsafe {
+            SetWindowLongW(hwnd, GWL_STYLE, frameless);
+        }
+        // SAFETY: hwnd 属于本进程;SWP_FRAMECHANGED 刷新非客户区且不改变位置、尺寸和层级。
+        if unsafe {
+            SetWindowPos(
+                hwnd,
+                ptr::null_mut(),
+                0,
+                0,
+                0,
+                0,
+                SWP_FRAMECHANGED | SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER,
+            )
+        } == 0
+        {
+            log::warn!("刷新 Windows 弹窗无边框样式失败");
+        }
     }
 
     let mut rect = RECT::default();
