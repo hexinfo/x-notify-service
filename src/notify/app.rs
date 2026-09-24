@@ -496,9 +496,10 @@ fn title_row(state: &State) -> Element<'_, Message> {
         .wrapping(iced::widget::text::Wrapping::None)
         .width(Length::Fill);
     #[cfg(windows)]
-    let title_alignment = iced::alignment::Vertical::Bottom;
-    #[cfg(not(windows))]
-    let title_alignment = iced::alignment::Vertical::Center;
+    let title = title
+        .height(Length::Fill)
+        .center()
+        .align_x(iced::alignment::Horizontal::Left);
     row![
         container(title)
             .padding(Padding {
@@ -508,7 +509,7 @@ fn title_row(state: &State) -> Element<'_, Message> {
                 right: popup::PAD_RIGHT,
             })
             .height(Length::Fill)
-            .align_y(title_alignment)
+            .align_y(iced::alignment::Vertical::Center)
             .width(Length::Fill),
         close_button(state.hover_close),
     ]
