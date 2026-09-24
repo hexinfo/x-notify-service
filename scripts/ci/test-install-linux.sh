@@ -31,6 +31,7 @@ chmod +x "$HOME/.local/bin/x-notify-service"
 cat > "$PKG/bin/x-notify-service" <<'EOF'
 #!/bin/sh
 printf '%s\n' "$1" >> "$HOME/new-calls"
+if [ "$1" = notify ]; then printf '%s\n' "$*" >> "$HOME/notify-args"; fi
 case "$1" in
     --version) [ ! -f "$HOME/fail-version" ] ;;
     install) [ ! -f "$HOME/fail-install" ] ;;
@@ -43,6 +44,7 @@ chmod +x "$PKG/bin/x-notify-service"
 [ "$(cat "$HOME/old-calls")" = uninstall ]
 [ "$(grep -c '^install$' "$HOME/new-calls")" = 1 ]
 [ "$(grep -c '^notify$' "$HOME/new-calls")" = 1 ]
+[ "$(grep -c 'x-notify-service 安装成功' "$HOME/notify-args")" = 1 ]
 [ "$(readlink "$HOME/.local/bin/x-notify-service")" = "$XDG_DATA_HOME/Hexinfo/x-notify-service/x-notify-service" ]
 [ -f "$XDG_DATA_HOME/Hexinfo/x-notify-service/sdk.js" ]
 [ -f "$XDG_DATA_HOME/icons/hicolor/32x32/apps/x-notify-service.png" ]
@@ -81,7 +83,7 @@ if "$PKG/install.sh" </dev/null >"$TMP/output" 2>&1; then
     exit 1
 fi
 [ -f "$HOME/dialog" ] || { sed -n '1,80p' "$TMP/output" >&2; exit 1; }
-[ "$(grep -c 'Hexinfo 安装失败' "$HOME/dialog")" = 1 ]
+[ "$(grep -c 'x-notify-service 安装失败' "$HOME/dialog")" = 1 ]
 [ -d "$XDG_CONFIG_HOME/x-notify-service" ]
 [ -f "$XDG_DATA_HOME/x-notify-service/port" ]
 [ -d "$XDG_STATE_HOME/x-notify-service" ]

@@ -16,10 +16,10 @@ STEP='安装准备'
 show_result() {
     status=$1
     if [ "$status" -eq 0 ]; then
-        title='Hexinfo 安装成功'
+        title='x-notify-service 安装成功'
         message="服务已安装并启动。配置：$CONF_DIR/config.toml"
     else
-        title='Hexinfo 安装失败'
+        title='x-notify-service 安装失败'
         message="失败步骤：${STEP}（退出码 ${status}）。请在终端运行 install.sh 查看详情。"
     fi
     if [ -x "$NEW_BIN" ] && "$NEW_BIN" notify --title "$title" --body "$message" </dev/null >/dev/null 2>&1; then return; fi
