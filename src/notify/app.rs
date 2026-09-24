@@ -10,7 +10,9 @@ use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::mpsc::{Receiver, SyncSender, sync_channel};
 use std::time::{Duration, Instant};
 
-use iced::font::{Family, Weight};
+use iced::font::Family;
+#[cfg(not(windows))]
+use iced::font::Weight;
 use iced::widget::container::Style as ContainerStyle;
 use iced::widget::{Column, container, markdown, mouse_area, row, text};
 use iced::{Color, Element, Font, Length, Padding, Subscription, Task, Theme, daemon, window};
@@ -108,7 +110,15 @@ const UI_FONT: Font = Font {
     ..Font::DEFAULT
 };
 
-const BOLD: Font = Font {
+#[cfg(windows)]
+const TITLE_FONT_SIZE: f32 = 14.0;
+#[cfg(not(windows))]
+const TITLE_FONT_SIZE: f32 = 16.0;
+
+#[cfg(windows)]
+const TITLE_FONT: Font = UI_FONT;
+#[cfg(not(windows))]
+const TITLE_FONT: Font = Font {
     family: Family::Name(UI_FONT_FAMILY),
     weight: Weight::Bold,
     ..Font::DEFAULT
@@ -252,6 +262,8 @@ fn update(state: &mut State, message: Message) -> Task<Message> {
             if state.window != Some(id) {
                 return Task::none();
             }
+            #[cfg(windows)]
+            crate::notify::window_shape::apply();
             if let Some(ack) = state.pending_ack.take()
                 && !ack.complete(true)
             {
@@ -300,6 +312,9 @@ fn update(state: &mut State, message: Message) -> Task<Message> {
             let Some(id) = state.window else {
                 return Task::none();
             };
+            // 复用窗口调整尺寸后,按当前物理尺寸和 DPI 重建裁切区域。
+            #[cfg(windows)]
+            crate::notify::window_shape::apply();
             if popup::should_retry_x11_init(delay_ms) {
                 // 首 tick 兜底:窗口新开时原生窗可能尚未进 _NET_CLIENT_LIST
                 #[cfg(target_os = "linux")]
@@ -471,13 +486,13 @@ fn body_panel_style(background: Color) -> ContainerStyle {
     }
 }
 
-/// 标题行:加粗标题(单行截断)+ 关闭钮,垂直居中
+/// 标题行:Windows 与演示页输入框字体一致,其余平台保留原有粗体;单行截断并垂直居中
 fn title_row(state: &State) -> Element<'_, Message> {
     row![
         container(
             text(popup::elide_title(&state.title, state.size.width))
-                .size(16.0)
-                .font(BOLD)
+                .size(TITLE_FONT_SIZE)
+                .font(TITLE_FONT)
                 .color(color(state.colors.header_text))
                 .wrapping(iced::widget::text::Wrapping::None)
                 .width(Length::Fill),
@@ -646,6 +661,16 @@ mod tests {
     use super::{Message, PopupAck, State, body_panel_style, color, header_style, update};
     use crate::notify::popup::Colors;
     use std::time::Duration;
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_title_matches_demo_input_typography() {
+        use iced::font::{Family, Weight};
+
+        assert!((super::TITLE_FONT_SIZE - 14.0).abs() < f32::EPSILON);
+        assert_eq!(super::TITLE_FONT.family, Family::Name("Microsoft YaHei UI"));
+        assert_eq!(super::TITLE_FONT.weight, Weight::Normal);
+    }
 
     #[test]
     fn popup_ack_confirms_only_opened_window() {

@@ -92,6 +92,16 @@ pub const SLIDE_MS: u64 = 220;
 /// 显示后位置复校节奏(对抗 WM 把新映射窗口重摆到默认位)
 pub const FIXUP_DELAYS_MS: [u64; 4] = [50, 120, 250, 500];
 
+/// Windows GDI 圆角椭圆直径(物理像素),按窗口 DPI 缩放并限制在窗口内。
+#[cfg(any(windows, test))]
+#[allow(clippy::integer_division_remainder_used)]
+pub fn corner_diameter(dpi: u32, width: i32, height: i32) -> i32 {
+    let dpi = if dpi == 0 { 96 } else { dpi };
+    let scaled = dpi.saturating_mul(20).saturating_add(48) / 96;
+    let limit = u32::try_from(width.min(height)).unwrap_or_default();
+    i32::try_from(scaled.min(limit)).unwrap_or(i32::MAX)
+}
+
 const TITLE_FONT_PX: f64 = 16.0;
 
 /// 首个 fixup tick 承担 X11 属性兜底重试:窗口新开时原生窗可能尚未可查
@@ -288,6 +298,13 @@ mod tests {
         // 默认自身必须在范围内
         assert!((f64::from(MIN_W)..=f64::from(MAX_W)).contains(&d.width));
         assert!((f64::from(MIN_H)..=f64::from(MAX_H)).contains(&d.height));
+    }
+
+    #[test]
+    fn corner_diameter_scales_with_dpi_and_fits_window() {
+        assert_eq!(super::corner_diameter(96, 220, 100), 20);
+        assert_eq!(super::corner_diameter(144, 330, 150), 30);
+        assert_eq!(super::corner_diameter(192, 12, 8), 8);
     }
 
     #[test]

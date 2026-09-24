@@ -3,6 +3,8 @@ pub mod fallback;
 pub mod popup;
 #[cfg(target_os = "linux")]
 pub mod window_icon;
+#[cfg(windows)]
+pub mod window_shape;
 
 use std::sync::atomic::{AtomicBool, Ordering};
 
