@@ -51,7 +51,7 @@ fn instance(cfg: &config::Config) {
     );
 }
 
-/// 显示环境 + 工作区与弹窗理论落点(GPUI/GPU 最终可用性由服务运行时确认)
+/// 显示环境 + GUI 探测 + 工作区与弹窗理论落点(与弹窗定位共用同一计算)
 fn display(cfg: &config::Config) {
     let disp = std::env::var_os("DISPLAY")
         .map_or_else(|| "未设置".into(), |v| v.to_string_lossy().into_owned());
@@ -61,7 +61,12 @@ fn display(cfg: &config::Config) {
     if cfg.no_popup {
         println!("弹窗配置: no_popup=true,通知强制走系统通知");
     }
-    println!("GPUI 状态: 启动服务时探测(GPU/驱动失败将降级系统通知)");
+    if !notify::popup::gui_probe() {
+        println!("GUI 探测: 未检测到可用显示环境,通知将走系统通知");
+        println!("工作区:   未探测(弹窗不可用,无需工作区)");
+        return;
+    }
+    println!("GUI 探测: 显示环境可连接(实际开窗需发送通知确认)");
     let size = notify::popup::resolve_size(None, None);
     match screen::work_area() {
         Some(area) => {
@@ -71,10 +76,7 @@ fn display(cfg: &config::Config) {
                 area.x, area.y, area.w, area.h, area.scale, size.width, size.height
             );
         }
-        None if way != "未设置" => {
-            println!("工作区:   交由 Wayland Layer Shell 在运行时右下角锚定");
-        }
-        None => println!("工作区:   无法获取(无可用显示环境)"),
+        None => println!("工作区:   无法获取(Wayland 会话或无可用 X 屏幕)"),
     }
 }
 

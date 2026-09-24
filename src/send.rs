@@ -38,7 +38,11 @@ pub fn run(cfg: &Config, req: &crate::api::NotifyRequest, fallback: bool) {
         return;
     }
 
-    if fallback || cfg.no_popup {
+    let gui_ok = !fallback
+        && !cfg.no_popup
+        && notify::popup::gui_probe()
+        && crate::screen::work_area().is_some();
+    if !gui_ok {
         let presenter = notify::fallback::SystemPresenter::new(cfg);
         if presenter.present(&title, &body_markdown, size, colors) {
             println!("已发送系统通知(via=system)");
@@ -51,19 +55,9 @@ pub fn run(cfg: &Config, req: &crate::api::NotifyRequest, fallback: bool) {
 
     println!("弹窗已显示(无运行中服务,本进程驻留至点击关闭)");
     // 单发模式:daemon 预置本条通知,弹窗关闭后事件循环退出、进程结束
-    let payload = notify::view::PopupPayload {
-        title: title.clone(),
-        body_markdown: body_markdown.clone(),
-        size,
-        colors,
-        quit_on_close: true,
-    };
-    if let Err(e) = notify::app::run_single(payload) {
-        eprintln!("GPUI 弹窗不可用,降级系统通知: {e}");
-        let presenter = notify::fallback::SystemPresenter::new(cfg);
-        if !presenter.present(&title, &body_markdown, size, colors) {
-            std::process::exit(1);
-        }
+    if let Err(e) = notify::app::run_single(title, body_markdown, size, colors) {
+        eprintln!("事件循环异常: {e}");
+        std::process::exit(1);
     }
 }
 

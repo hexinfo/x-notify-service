@@ -1,5 +1,4 @@
-// Windows 始终使用 GUI 子系统:服务、自启动与双击均不创建控制台窗口；
-// CLI 从现有终端运行时由 windows_env 主动附着父控制台。
+// Windows 始终使用 GUI 子系统:服务和弹窗不创建控制台窗口。
 #![cfg_attr(windows, windows_subsystem = "windows")]
 
 mod api;
@@ -92,7 +91,7 @@ fn main() {
     }
 }
 
-/// 服务主流程:单实例 → 绑端口 → GPUI 事件循环(失败后保持系统通知服务)
+/// 服务主流程:单实例 → GUI 探测(先于 HTTP,避免启动早期请求降级)→ 绑端口 → 事件循环
 fn serve(cfg: &config::Config) {
     log::info!(
         "x-notify-service {} 启动(默认端口 {},日志目录 {})",
@@ -106,62 +105,37 @@ fn serve(cfg: &config::Config) {
         return;
     }
 
-    notify::POPUP_AVAILABLE.store(false, std::sync::atomic::Ordering::Release);
+    // 启动前探测显示环境；iced 事件循环尚未就绪时请求会走系统通知。
+    let gui_ok = !cfg.no_popup && notify::popup::gui_probe();
+    notify::POPUP_AVAILABLE.store(gui_ok, std::sync::atomic::Ordering::Relaxed);
+    if !gui_ok {
+        if cfg.no_popup {
+            log::info!("--no-popup:通知全部走系统通知");
+        } else {
+            log::warn!("弹窗不可用,通知将走系统通知兜底");
+        }
+    }
 
     let port = server::start(cfg.clone());
     single::write_port_file(port);
     log::info!("服务已就绪: http://127.0.0.1:{port}");
 
-    if cfg.no_popup {
-        log::info!("--no-popup:通知全部走系统通知");
-        park_system_service();
+    if !gui_ok {
+        // 无 GUI 模式:主线程挂起,HTTP 工作线程继续服务
+        #[allow(clippy::infinite_loop)]
+        loop {
+            std::thread::park();
+        }
     }
 
-    // QuitMode::Explicit:弹窗窗口关闭不会结束事件循环(服务常驻语义)
-    record_gui_exit(notify::app::run_service());
-    park_system_service();
-}
-
-fn record_gui_exit(result: Result<(), notify::app::AppError>) {
-    // 无论 GPUI 正常或异常退出，HTTP 工作线程都继续提供系统通知兜底。
-    notify::POPUP_AVAILABLE.store(false, std::sync::atomic::Ordering::Release);
-    match result {
-        Ok(()) => log::warn!("GPUI 事件循环已退出,服务继续使用系统通知"),
-        Err(error) => log::error!("GPUI 事件循环异常退出: {error}"),
-    }
-}
-
-#[allow(clippy::infinite_loop)]
-fn park_system_service() -> ! {
-    loop {
-        std::thread::park();
-    }
-}
-
-#[cfg(test)]
-mod lifecycle_tests {
-    use super::record_gui_exit;
-
-    #[test]
-    fn windows_subsystem_is_gui_in_all_builds() {
-        assert!(
-            include_str!("main.rs").contains("cfg_attr(windows, windows_subsystem = \"windows\")")
-        );
-    }
-
-    #[test]
-    fn normal_gui_exit_disables_popup_channel() {
-        crate::notify::POPUP_AVAILABLE.store(true, std::sync::atomic::Ordering::Release);
-        record_gui_exit(Ok(()));
-        assert!(!crate::notify::POPUP_AVAILABLE.load(std::sync::atomic::Ordering::Acquire));
-    }
-
-    #[test]
-    fn failed_gui_exit_disables_popup_channel() {
-        crate::notify::POPUP_AVAILABLE.store(true, std::sync::atomic::Ordering::Release);
-        record_gui_exit(Err(crate::notify::app::AppError::PlatformInit(
-            "test".into(),
-        )));
-        assert!(!crate::notify::POPUP_AVAILABLE.load(std::sync::atomic::Ordering::Acquire));
+    // daemon:弹窗窗口关闭不会结束事件循环(服务常驻语义)
+    if let Err(e) = notify::app::run_service() {
+        log::error!("GUI 事件循环异常退出: {e}");
+        // 通道已断,后续通知转系统通知兜底
+        notify::POPUP_AVAILABLE.store(false, std::sync::atomic::Ordering::Relaxed);
+        #[allow(clippy::infinite_loop)]
+        loop {
+            std::thread::park();
+        }
     }
 }

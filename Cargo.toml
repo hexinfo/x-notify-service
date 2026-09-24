@@ -1,6 +1,6 @@
 [package]
 name = "x-notify-service"
-version = "3.2.2"
+version = "3.2.3"
 edition = "2024"
 publish = ["crates-io"]
 description = "跨平台消息通知服务:浏览器调用 → 右下角置顶弹窗(系统通知兜底)"
@@ -16,13 +16,22 @@ log = "0.4"
 clap = { version = "4", features = ["derive"] }
 dirs = "6"
 fd-lock = "4"
-gpui-kit = { version = "0.6.6", default-features = false }
 markdown = "1.0"
-raw-window-handle = "0.6"
-futures = "0.3"
-
-[dev-dependencies]
-gpui-kit = { version = "0.6.6", default-features = false, features = ["test-support"] }
+iced = { version = "0.14", default-features = false, features = [
+    # 软件渲染(CPU/softbuffer,老 Linux 无 GPU 友好),不拉 wgpu
+    "tiny-skia",
+    # 只带 X11 后端:Wayland 会话在应用层即降级系统通知,二进制无需 wayland 协议栈
+    "x11",
+    # rich_text/span 的 color 构建器方法在此 feature 门后
+    "advanced",
+    "markdown",
+    # 复杂文字整形(CJK 必需)
+    "advanced-shaping",
+    # 像素对齐(软渲染下文字锐利)
+    "crisp",
+    # 默认执行器(纯线程池,不带 tokio)
+    "thread-pool",
+] }
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.55"
@@ -36,17 +45,16 @@ windows-sys = { version = "0.61", features = [
 
 [target.'cfg(target_os = "linux")'.dependencies]
 x11rb = "0.13"
-image = { version = "0.25", default-features = false, features = ["png"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"
 objc2-foundation = { version = "0.3", features = ["NSGeometry"] }
-objc2-app-kit = { version = "0.3", features = ["NSApplication", "NSRunningApplication", "NSScreen"] }
-dispatch2 = "0.3"
+objc2-app-kit = { version = "0.3", features = ["NSScreen"] }
 
 
 [build-dependencies]
 winresource = "0.1"
+png = "0.17"
 
 # ── 最严格 lint 配置:五组全 deny,仅对互斥/不适用项定向豁免 ──
 [lints.rust]
@@ -92,7 +100,7 @@ as_conversions = "allow" # 布局/几何换算密集;具体危险转换由 cast_
 float_arithmetic = "allow" # 弹窗定位几何数学必需
 arithmetic_side_effects = "allow" # 域内已保证非负
 integer_division = "allow"
-indexing_slicing = "allow" # 已验证下标的切片访问
+indexing_slicing = "allow" # html 解析按已验证字节下标取值
 string_slice = "allow" # 同上
 single_call_fn = "allow" # 命名步骤函数是本库可读性风格
 arbitrary_source_item_ordering = "allow" # 按逻辑分组而非字母序
@@ -104,7 +112,8 @@ std_instead_of_core = "allow" # 系统 GUI 应用,无 no_std 诉求
 std_instead_of_alloc = "allow"
 alloc_instead_of_core = "allow"
 str_to_string = "allow"
-mod_module_files = "allow" # 项目规范用 mod.rs
+mod_module_files = "allow" # 项目规范用 mod.rs(html/mod.rs)
+pub_use = "allow" # html 门面模式(对外仅 4 符号)是架构决策
 multiple_inherent_impl = "allow" # 按平台/职责分 impl 块是本库组织方式
 
 # 二进制 crate,无外部 API 消费者,库 API 类 lint 豁免
