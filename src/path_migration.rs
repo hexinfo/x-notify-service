@@ -221,6 +221,89 @@ mod tests {
         assert_eq!(fs::read_to_string(new.join("custom.txt")).unwrap(), "mine");
     }
 
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn mac_support_and_logs_migrate_to_namespaced_paths() {
+        let root = tempfile::tempdir().unwrap();
+        let support = root.path().join("Library/Application Support");
+        let logs = root.path().join("Library/Logs");
+        let old_support = crate::config::legacy_private_dir(support.clone());
+        let new_support = crate::config::private_dir(support);
+        let old_logs = crate::config::legacy_private_dir(logs.clone());
+        let new_logs = crate::config::private_dir(logs);
+        fs::create_dir_all(&old_support).unwrap();
+        fs::create_dir_all(&old_logs).unwrap();
+        fs::write(old_support.join("config.toml"), "port = 17321\n").unwrap();
+        fs::write(old_support.join("user-data.txt"), "keep me").unwrap();
+        fs::write(old_logs.join("service.log"), "old log").unwrap();
+
+        migrate_tree(&old_support, &new_support, &[]).unwrap();
+        migrate_tree(&old_logs, &new_logs, &[]).unwrap();
+
+        assert_eq!(
+            fs::read_to_string(new_support.join("config.toml")).unwrap(),
+            "port = 17321\n"
+        );
+        assert_eq!(
+            fs::read_to_string(new_support.join("user-data.txt")).unwrap(),
+            "keep me"
+        );
+        assert_eq!(
+            fs::read_to_string(new_logs.join("service.log")).unwrap(),
+            "old log"
+        );
+        assert!(!old_support.exists());
+        assert!(!old_logs.exists());
+        assert!(
+            migrate_tree(&old_support, &new_support, &[])
+                .unwrap()
+                .moved
+                .is_empty()
+        );
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn mac_existing_config_wins_while_other_files_and_logs_migrate() {
+        let root = tempfile::tempdir().unwrap();
+        let support = root.path().join("Library/Application Support");
+        let logs = root.path().join("Library/Logs");
+        let old_support = crate::config::legacy_private_dir(support.clone());
+        let new_support = crate::config::private_dir(support);
+        let old_logs = crate::config::legacy_private_dir(logs.clone());
+        let new_logs = crate::config::private_dir(logs);
+        fs::create_dir_all(&old_support).unwrap();
+        fs::create_dir_all(&new_support).unwrap();
+        fs::create_dir_all(&old_logs).unwrap();
+        fs::write(old_support.join("config.toml"), "port = 17321\n").unwrap();
+        fs::write(new_support.join("config.toml"), "port = 17322\n").unwrap();
+        fs::write(old_support.join("user-data.txt"), "keep me").unwrap();
+        fs::write(old_logs.join("service.log"), "old log").unwrap();
+
+        let report = migrate_tree(&old_support, &new_support, &[]).unwrap();
+        migrate_tree(&old_logs, &new_logs, &[]).unwrap();
+
+        assert_eq!(report.conflicts, vec![old_support.join("config.toml")]);
+        assert_eq!(
+            fs::read_to_string(old_support.join("config.toml")).unwrap(),
+            "port = 17321\n"
+        );
+        assert_eq!(
+            fs::read_to_string(new_support.join("config.toml")).unwrap(),
+            "port = 17322\n"
+        );
+        assert_eq!(
+            fs::read_to_string(new_support.join("user-data.txt")).unwrap(),
+            "keep me"
+        );
+        assert_eq!(
+            fs::read_to_string(new_logs.join("service.log")).unwrap(),
+            "old log"
+        );
+        assert!(old_support.exists());
+        assert!(!old_logs.exists());
+    }
+
     #[cfg(unix)]
     #[test]
     fn symlink_is_moved_without_traversing_target() {

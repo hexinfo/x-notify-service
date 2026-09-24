@@ -256,4 +256,32 @@ mod tests {
         );
         assert_eq!(super::APP_DIR_NAME, "x-notify-service");
     }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn mac_private_paths_are_namespaced() {
+        let root = tempfile::tempdir().unwrap();
+        let support = root.path().join("Library/Application Support");
+        let logs = root.path().join("Library/Logs");
+        assert_eq!(
+            super::private_dir(support.clone()),
+            support.join("Hexinfo/x-notify-service")
+        );
+        assert_eq!(
+            super::private_dir(logs.clone()),
+            logs.join("Hexinfo/x-notify-service")
+        );
+        assert_eq!(
+            super::legacy_private_dir(support.clone()),
+            support.join("x-notify-service")
+        );
+        assert_eq!(
+            super::legacy_private_dir(logs.clone()),
+            logs.join("x-notify-service")
+        );
+        assert_eq!(
+            super::default_log_dir(),
+            super::private_dir(dirs::home_dir().unwrap().join("Library/Logs"))
+        );
+    }
 }
