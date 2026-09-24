@@ -85,4 +85,22 @@ fi
 [ -d "$XDG_CONFIG_HOME/x-notify-service" ]
 [ -f "$XDG_DATA_HOME/x-notify-service/port" ]
 [ -d "$XDG_STATE_HOME/x-notify-service" ]
+
+# 首次放置程序前即失败时，包内二进制仍给出可见反馈，且返回原始错误码。
+rm "$HOME/fail-install" "$HOME/fail-notify"
+before=$(grep -c '^notify$' "$HOME/new-calls")
+XDG_DATA_HOME=$HOME/blocked-data
+export XDG_DATA_HOME
+printf 'not a directory\n' > "$XDG_DATA_HOME"
+mkdir -p "$TMP/early-tools"
+for tool in dirname mkdir rm; do ln -s "$(command -v "$tool")" "$TMP/early-tools/$tool"; done
+test_path=$PATH
+PATH=$TMP/early-tools
+export PATH
+status=0
+"$PKG/install.sh" </dev/null >"$TMP/output" 2>&1 || status=$?
+PATH=$test_path
+export PATH
+[ "$status" -eq 1 ]
+[ "$(grep -c '^notify$' "$HOME/new-calls")" -eq "$((before + 1))" ]
 echo 'PASS: Linux installer mock checks'

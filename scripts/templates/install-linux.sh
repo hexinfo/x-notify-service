@@ -23,6 +23,7 @@ show_result() {
         message="失败步骤：${STEP}（退出码 ${status}）。请在终端运行 install.sh 查看详情。"
     fi
     if [ -x "$NEW_BIN" ] && "$NEW_BIN" notify --title "$title" --body "$message" </dev/null >/dev/null 2>&1; then return; fi
+    if [ -x "$SRC_DIR/bin/x-notify-service" ] && "$SRC_DIR/bin/x-notify-service" notify --title "$title" --body "$message" </dev/null >/dev/null 2>&1; then return; fi
     if command -v zenity >/dev/null 2>&1 && zenity --info --title="$title" --text="$message" </dev/null >/dev/null 2>&1; then return; fi
     if command -v kdialog >/dev/null 2>&1 && kdialog --msgbox "$message" --title "$title" </dev/null >/dev/null 2>&1; then return; fi
     if command -v notify-send >/dev/null 2>&1 && notify-send "$title" "$message" >/dev/null 2>&1; then return; fi
