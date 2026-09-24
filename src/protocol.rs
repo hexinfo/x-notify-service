@@ -104,7 +104,7 @@ pub fn register() -> Result<(), Box<dyn std::error::Error>> {
         "[Desktop Entry]\n\
          Type=Application\n\
          Name={name}\n\
-         Exec="{exe}" %u\n\
+         {exec_line}\n\
          Icon={name}\n\
          StartupWMClass={name}\n\
          X-Deepin-AppID={name}\n\
@@ -112,7 +112,7 @@ pub fn register() -> Result<(), Box<dyn std::error::Error>> {
          Terminal=false\n\
          MimeType=x-scheme-handler/{scheme};\n",
         name = crate::config::APP_DIR_NAME,
-        exe = desktop_exec_path(&exe),
+        exec_line = desktop_exec_line(&exe),
         scheme = SCHEME,
     );
     std::fs::write(&path, content)?;
@@ -130,6 +130,11 @@ pub fn register() -> Result<(), Box<dyn std::error::Error>> {
         ])
         .status();
     Ok(())
+}
+
+#[cfg(any(target_os = "linux", test))]
+fn desktop_exec_line(path: &std::path::Path) -> String {
+    format!("Exec=\"{}\" %u", desktop_exec_path(path))
 }
 
 #[cfg(any(target_os = "linux", test))]
@@ -153,8 +158,8 @@ fn desktop_exec_path(path: &std::path::Path) -> String {
 fn desktop_exec_path_escapes_special_characters() {
     let path = std::path::Path::new("/home/a b/quo\"te\\cash$`%/x-notify-service");
     assert_eq!(
-        desktop_exec_path(path),
-        "/home/a b/quo\\\\\\\"te\\\\\\\\cash\\\\$\\\\`%%/x-notify-service"
+        desktop_exec_line(path),
+        "Exec=\"/home/a b/quo\\\\\\\"te\\\\\\\\cash\\\\$\\\\`%%/x-notify-service\" %u"
     );
 }
 
