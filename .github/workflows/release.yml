@@ -44,6 +44,7 @@ jobs:
           node-version: 24
       - run: npm install -g pnpm@10
       - run: ./scripts/pack-linux.sh x86_64
+      - run: sh scripts/ci/test-install-linux.sh
       - uses: actions/upload-artifact@v4
         with:
           name: linux-x86_64-tarxz
@@ -65,6 +66,7 @@ jobs:
           node-version: 24
       - run: npm install -g pnpm@10
       - run: ./scripts/pack-linux.sh aarch64
+      - run: sh scripts/ci/test-install-linux.sh
       - uses: actions/upload-artifact@v4
         with:
           name: linux-aarch64-tarxz
@@ -90,6 +92,10 @@ jobs:
         shell: bash
       - run: bash scripts/pack-windows.sh x86_64-pc-windows-msvc
         shell: bash
+      - shell: pwsh
+        run: |
+          $setup = Get-ChildItem dist/*-windows-x86_64-setup.exe | Select-Object -First 1
+          & ./scripts/ci/test-windows-clean-upgrade.ps1 -Setup $setup.FullName -ServiceExe ./target/x86_64-pc-windows-msvc/release/x-notify-service.exe
       # 产物冒烟:GUI 子系统经 AttachConsole 回显到本控制台
       - run: |
           ./target/x86_64-pc-windows-msvc/release/x-notify-service.exe --version

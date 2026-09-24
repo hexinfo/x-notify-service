@@ -107,9 +107,16 @@ jobs:
         shell: bash
       - if: runner.os == 'Linux'
         run: ./scripts/pack-linux.sh ${{ matrix.name == 'linux-x86_64' && 'x86_64' || 'aarch64' }}
+      - if: runner.os == 'Linux'
+        run: sh scripts/ci/test-install-linux.sh
       - if: runner.os == 'Windows'
         run: bash scripts/pack-windows.sh x86_64-pc-windows-msvc
         shell: bash
+      - if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $setup = Get-ChildItem dist/*-windows-x86_64-setup.exe | Select-Object -First 1
+          & ./scripts/ci/test-windows-clean-upgrade.ps1 -Setup $setup.FullName -ServiceExe ./target/x86_64-pc-windows-msvc/release/x-notify-service.exe
       # Windows 产物冒烟:GUI 子系统经 AttachConsole 回显到本控制台
       - if: runner.os == 'Windows'
         run: |
