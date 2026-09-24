@@ -51,7 +51,7 @@
 </script>
 ```
 
-sdk.js / sdk.umd.js 获取途径：发行包内、Linux `~/.local/share/x-notify-service/`、Windows 安装目录。
+sdk.js / sdk.umd.js 获取途径：发行包内、Linux `$XDG_DATA_HOME/Hexinfo/x-notify-service/`（未设置时为 `~/.local/share/Hexinfo/x-notify-service/`）、Windows 安装目录。Linux 配置位于 `$XDG_CONFIG_HOME/Hexinfo/x-notify-service/config.toml`（未设置时为 `~/.config/Hexinfo/x-notify-service/config.toml`）。双击发行包内 `install.sh` 后会弹出安装结果提示；升级时先卸载旧版，并在新版本安装成功后清理旧版配置与数据目录。
 
 ## 3. 快速开始
 

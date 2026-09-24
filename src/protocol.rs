@@ -76,11 +76,9 @@ pub fn unregister() -> Result<(), Box<dyn std::error::Error>> {
 
 #[cfg(target_os = "linux")]
 fn desktop_path() -> std::path::PathBuf {
-    dirs::home_dir()
-        .map_or_else(
-            || std::path::PathBuf::from(".local/share/applications"),
-            |h| h.join(".local/share/applications"),
-        )
+    dirs::data_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from(".local/share"))
+        .join("applications")
         .join(format!("{}.desktop", crate::config::APP_DIR_NAME))
 }
 
@@ -106,7 +104,7 @@ pub fn register() -> Result<(), Box<dyn std::error::Error>> {
         "[Desktop Entry]\n\
          Type=Application\n\
          Name={name}\n\
-         Exec={exe} %u\n\
+         Exec="{exe}" %u\n\
          Icon={name}\n\
          StartupWMClass={name}\n\
          X-Deepin-AppID={name}\n\
@@ -114,7 +112,7 @@ pub fn register() -> Result<(), Box<dyn std::error::Error>> {
          Terminal=false\n\
          MimeType=x-scheme-handler/{scheme};\n",
         name = crate::config::APP_DIR_NAME,
-        exe = exe.display(),
+        exe = desktop_exec_path(&exe),
         scheme = SCHEME,
     );
     std::fs::write(&path, content)?;
@@ -132,6 +130,32 @@ pub fn register() -> Result<(), Box<dyn std::error::Error>> {
         ])
         .status();
     Ok(())
+}
+
+#[cfg(any(target_os = "linux", test))]
+fn desktop_exec_path(path: &std::path::Path) -> String {
+    let mut escaped = String::new();
+    for ch in path.to_string_lossy().chars() {
+        match ch {
+            '\\' => escaped.push_str("\\\\\\\\"),
+            '"' => escaped.push_str("\\\\\\\""),
+            '$' => escaped.push_str("\\\\$"),
+            '`' => escaped.push_str("\\\\`"),
+            '%' => escaped.push_str("%%"),
+            _ => escaped.push(ch),
+        }
+    }
+    escaped
+}
+
+#[cfg(test)]
+#[test]
+fn desktop_exec_path_escapes_special_characters() {
+    let path = std::path::Path::new("/home/a b/quo\"te\\cash$`%/x-notify-service");
+    assert_eq!(
+        desktop_exec_path(path),
+        "/home/a b/quo\\\\\\\"te\\\\\\\\cash\\\\$\\\\`%%/x-notify-service"
+    );
 }
 
 #[cfg(target_os = "linux")]
