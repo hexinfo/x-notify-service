@@ -107,6 +107,11 @@ jobs:
         shell: bash
       - if: runner.os == 'Linux'
         run: ./scripts/pack-linux.sh ${{ matrix.name == 'linux-x86_64' && 'x86_64' || 'aarch64' }}
+      - if: github.event_name == 'pull_request' && matrix.name == 'linux-aarch64'
+        uses: actions/upload-artifact@v4
+        with:
+          name: x-notify-service-linux-aarch64-test
+          path: dist/x-notify-service-*-linux-aarch64.tar.xz
       - if: runner.os == 'Windows'
         run: bash scripts/pack-windows.sh x86_64-pc-windows-msvc
         shell: bash

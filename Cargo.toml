@@ -48,6 +48,9 @@ dispatch2 = "0.3"
 [build-dependencies]
 winresource = "0.1"
 
+[patch.crates-io]
+gpui-pre-wgpu = { path = "vendor-gpui-pre-wgpu-0.3.6" }
+
 # ── 最严格 lint 配置:五组全 deny,仅对互斥/不适用项定向豁免 ──
 [lints.rust]
 unsafe_code = "deny" # 仅 screen.rs 各平台取屏 FFI,以局部 allow + 安全注释标注
