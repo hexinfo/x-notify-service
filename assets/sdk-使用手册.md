@@ -51,7 +51,7 @@
 </script>
 ```
 
-sdk.js / sdk.umd.js 获取途径：发行包内、Linux `~/.local/share/x-notify-service/`、Windows 安装目录。
+sdk.js / sdk.umd.js 获取途径：发行包内、Linux `$XDG_DATA_HOME/Hexinfo/x-notify-service/`（未设置时为 `~/.local/share/Hexinfo/x-notify-service/`）、Windows 安装目录。
 
 ## 3. 快速开始
 
