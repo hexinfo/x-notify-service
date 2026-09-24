@@ -3,6 +3,12 @@ use std::path::PathBuf;
 use clap::{Parser, Subcommand};
 
 pub const DEFAULT_PORT: u16 = 17320;
+pub const ORGANIZATION_DIR_NAME: &str = "Hexinfo";
+pub const APP_DIR_NAME: &str = "x-notify-service";
+
+pub fn private_dir(root: &std::path::Path) -> PathBuf {
+    root.join(ORGANIZATION_DIR_NAME).join(APP_DIR_NAME)
+}
 
 #[derive(Debug, Parser)]
 #[command(
@@ -137,31 +143,33 @@ pub fn default_log_dir() -> PathBuf {
         // ~/Library/Logs
         dirs::home_dir().map_or_else(
             || PathBuf::from(".").join("logs"),
-            |h| h.join("Library").join("Logs").join(APP_DIR_NAME),
+            |h| private_dir(&h.join("Library").join("Logs")),
         )
     } else if cfg!(windows) {
         // %LOCALAPPDATA%
         dirs::data_local_dir().map_or_else(
             || PathBuf::from(".").join("logs"),
-            |d| d.join(APP_DIR_NAME).join("logs"),
+            |d| private_dir(&d).join("logs"),
         )
     } else {
         // XDG: ~/.local/state
         dirs::state_dir().map_or_else(
             || PathBuf::from(".").join("logs"),
-            |d| d.join(APP_DIR_NAME).join("logs"),
+            |d| private_dir(&d).join("logs"),
         )
     }
 }
 
 /// 平台用户配置目录
 fn user_config_path() -> Option<PathBuf> {
-    dirs::config_local_dir()
-        .or_else(dirs::config_dir)
-        .map(|d| d.join(APP_DIR_NAME).join("config.toml"))
+    #[cfg(windows)]
+    let root = dirs::data_local_dir();
+    #[cfg(target_os = "macos")]
+    let root = dirs::data_local_dir();
+    #[cfg(not(any(windows, target_os = "macos")))]
+    let root = dirs::config_dir();
+    root.map(|d| private_dir(&d).join("config.toml"))
 }
-
-pub const APP_DIR_NAME: &str = "x-notify-service";
 
 pub fn resolve(cli: &Cli) -> Config {
     let file = load_file_config(cli.config.as_deref());
@@ -225,4 +233,17 @@ fn candidates(explicit: Option<&std::path::Path>) -> Vec<PathBuf> {
         v.push(p);
     }
     v
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn private_dir_keeps_service_name_under_organization() {
+        assert_eq!(
+            private_dir(std::path::Path::new("root")),
+            PathBuf::from("root").join("Hexinfo").join(APP_DIR_NAME)
+        );
+    }
 }

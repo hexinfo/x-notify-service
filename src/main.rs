@@ -21,6 +21,7 @@ mod windows_env;
 
 use clap::Parser as _;
 
+#[allow(clippy::print_stderr)]
 fn main() {
     windows_env::attach_parent_console();
     let cli = config::Cli::parse();
@@ -53,7 +54,10 @@ fn main() {
         Some(config::Command::Serve) => serve(&cfg),
         Some(config::Command::Install) => {
             // 注册 + 分离启动服务后立即退出,供安装器/脚本调用不阻塞
-            install::install();
+            if let Err(e) = install::install() {
+                eprintln!("安装失败: {e}");
+                std::process::exit(1);
+            }
         }
         Some(config::Command::Uninstall) => {
             install::uninstall();

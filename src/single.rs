@@ -4,8 +4,8 @@ use std::path::PathBuf;
 /// 用户级数据目录(日志 port 文件等)
 pub fn data_dir() -> PathBuf {
     dirs::data_local_dir().map_or_else(
-        || std::env::temp_dir().join(crate::config::APP_DIR_NAME),
-        |d| d.join(crate::config::APP_DIR_NAME),
+        || crate::config::private_dir(&std::env::temp_dir()),
+        |d| crate::config::private_dir(&d),
     )
 }
 
@@ -14,7 +14,7 @@ fn lock_path() -> PathBuf {
     #[cfg(target_os = "linux")]
     {
         if let Some(rt) = std::env::var_os("XDG_RUNTIME_DIR") {
-            return PathBuf::from(rt).join(format!("{}.lock", crate::config::APP_DIR_NAME));
+            return crate::config::private_dir(&PathBuf::from(rt)).join("instance.lock");
         }
     }
     data_dir().join("instance.lock")

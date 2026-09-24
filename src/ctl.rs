@@ -47,7 +47,7 @@ pub fn start() {
         println!("服务已在运行(端口 {port})");
         return;
     }
-    start_detached();
+    let _ = start_detached();
     for _ in 0u8..30 {
         if let Some((port, Probe::Ours { .. })) = recorded_ours() {
             println!("服务已启动(端口 {port})");
@@ -93,10 +93,10 @@ fn recorded_ours() -> Option<(u16, Probe)> {
 }
 
 /// 分离启动服务进程(以 serve 子命令重新拉起自身);install 完成时同样走这里
-pub fn start_detached() {
+pub fn start_detached() -> Option<u32> {
     let Ok(exe) = std::env::current_exe() else {
         log::warn!("无法定位自身路径,跳过后台启动");
-        return;
+        return None;
     };
     let mut cmd = std::process::Command::new(exe);
     cmd.arg("serve")
@@ -118,10 +118,15 @@ pub fn start_detached() {
     match cmd.spawn() {
         Ok(child) => {
             log::info!("服务进程已分离启动(pid {})", child.id());
+            let pid = child.id();
             // 丢弃句柄,让子进程完全独立
             drop(child);
+            Some(pid)
         }
-        Err(e) => log::warn!("后台启动服务失败: {e}(可手动运行 x-notify-service)"),
+        Err(e) => {
+            log::warn!("后台启动服务失败: {e}(可手动运行 x-notify-service)");
+            None
+        }
     }
 }
 
