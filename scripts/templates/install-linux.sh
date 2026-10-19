@@ -11,6 +11,7 @@ CONF_DIR=$CONFIG_ROOT/Hexinfo/x-notify-service
 BIN_DIR=$HOME/.local/bin
 OLD_BIN=$BIN_DIR/x-notify-service
 NEW_BIN=$APP_DIR/x-notify-service
+PKG_BIN=''   # 由 uname -m 从 bin/<架构>/ 中选出的本机二进制
 STEP='安装准备'
 
 show_result() {
@@ -23,7 +24,7 @@ show_result() {
         message="失败步骤：${STEP}（退出码 ${status}）。请在终端运行 install.sh 查看详情。"
     fi
     if [ -x "$NEW_BIN" ] && "$NEW_BIN" notify --title "$title" --body "$message" </dev/null >/dev/null 2>&1; then return; fi
-    if [ -x "$SRC_DIR/bin/x-notify-service" ] && "$SRC_DIR/bin/x-notify-service" notify --title "$title" --body "$message" </dev/null >/dev/null 2>&1; then return; fi
+    if [ -n "$PKG_BIN" ] && [ -x "$PKG_BIN" ] && "$PKG_BIN" notify --title "$title" --body "$message" </dev/null >/dev/null 2>&1; then return; fi
     if command -v zenity >/dev/null 2>&1 && zenity --info --title="$title" --text="$message" </dev/null >/dev/null 2>&1; then return; fi
     if command -v kdialog >/dev/null 2>&1 && kdialog --msgbox "$message" --title "$title" </dev/null >/dev/null 2>&1; then return; fi
     if command -v notify-send >/dev/null 2>&1 && notify-send "$title" "$message" >/dev/null 2>&1; then return; fi
@@ -37,11 +38,22 @@ on_exit() {
 }
 trap on_exit EXIT
 
+STEP='识别系统架构'
+MACH=$(uname -m 2>/dev/null || true)
+case "$MACH" in
+    x86_64) PKG_BIN=$SRC_DIR/bin/x86_64/x-notify-service ;;
+    aarch64|arm64) PKG_BIN=$SRC_DIR/bin/aarch64/x-notify-service ;;
+    *)
+        echo "不支持的 CPU 架构：${MACH:-无法识别}（本安装包内置 x86_64 与 aarch64 两种二进制）" >&2
+        exit 1
+        ;;
+esac
+
 STEP='检查安装包'
-for file in "$SRC_DIR/bin/x-notify-service" "$SRC_DIR/config/config.toml" "$SRC_DIR/sdk.js" "$SRC_DIR/sdk.umd.js" "$SRC_DIR/sdk-使用手册.md"; do
+for file in "$PKG_BIN" "$SRC_DIR/config/config.toml" "$SRC_DIR/sdk.js" "$SRC_DIR/sdk.umd.js" "$SRC_DIR/sdk-使用手册.md"; do
     [ -f "$file" ] || { echo "安装包缺少：$file" >&2; exit 1; }
 done
-"$SRC_DIR/bin/x-notify-service" --version >/dev/null
+"$PKG_BIN" --version >/dev/null
 
 STEP='卸载旧版本'
 if [ -f "$OLD_BIN" ] && [ ! -L "$OLD_BIN" ] && [ -x "$OLD_BIN" ]; then
@@ -57,7 +69,7 @@ if [ -e "$OLD_BIN" ] || [ -L "$OLD_BIN" ]; then rm -f -- "$OLD_BIN"; fi
 
 STEP='放置程序和 SDK'
 mkdir -p -- "$APP_DIR" "$CONF_DIR" "$BIN_DIR"
-cp -- "$SRC_DIR/bin/x-notify-service" "$APP_DIR/.x-notify-service.new"
+cp -- "$PKG_BIN" "$APP_DIR/.x-notify-service.new"
 chmod +x "$APP_DIR/.x-notify-service.new"
 mv -f -- "$APP_DIR/.x-notify-service.new" "$NEW_BIN"
 cp -- "$SRC_DIR/sdk.js" "$SRC_DIR/sdk.umd.js" "$SRC_DIR/sdk-使用手册.md" "$APP_DIR/"

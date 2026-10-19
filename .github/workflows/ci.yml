@@ -98,17 +98,23 @@ jobs:
         with:
           workspaces: .
           shared-key: release-windows-msvc
-      - uses: actions/setup-node@v5
+      - if: runner.os == 'Windows'
+        uses: actions/setup-node@v5
         with:
           node-version: 24
-      - run: npm install -g pnpm@10
+      - if: runner.os == 'Windows'
+        run: npm install -g pnpm@10
       - if: runner.os == 'Windows'
         run: choco install nsis -y --no-progress && echo "C:\Program Files (x86)\NSIS" >> $GITHUB_PATH
         shell: bash
       - if: runner.os == 'Linux'
-        run: ./scripts/pack-linux.sh ${{ matrix.name == 'linux-x86_64' && 'x86_64' || 'aarch64' }}
+        run: ./scripts/pack-linux.sh build ${{ matrix.name == 'linux-x86_64' && 'x86_64' || 'aarch64' }}
+      # 裸二进制交给 pack-linux job 组装验证(与 release 的 linux-pack 同路径)
       - if: runner.os == 'Linux'
-        run: sh scripts/ci/test-install-linux.sh
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}-bin
+          path: target/linux-${{ matrix.name == 'linux-x86_64' && 'x86_64' || 'aarch64' }}/release/x-notify-service
       - if: runner.os == 'Windows'
         run: bash scripts/pack-windows.sh x86_64-pc-windows-msvc
         shell: bash
@@ -123,6 +129,28 @@ jobs:
           ./target/x86_64-pc-windows-msvc/release/x-notify-service.exe --version
           ./target/x86_64-pc-windows-msvc/release/x-notify-service.exe info | head -5
         shell: bash
+
+  # 双架构合一打包验证:下载两架构二进制,组装合一 tar.xz 并跑安装器 mock 测试
+  # (与 release.yml 的 linux-pack job 同一打包路径,main 上证明「可组装」)
+  pack-linux:
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
+        with:
+          name: linux-x86_64-bin
+          path: bin-staging/x86_64
+      - uses: actions/download-artifact@v4
+        with:
+          name: linux-aarch64-bin
+          path: bin-staging/aarch64
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - run: npm install -g pnpm@10
+      - run: ./scripts/pack-linux.sh pack bin-staging/x86_64/x-notify-service bin-staging/aarch64/x-notify-service
+      - run: sh scripts/ci/test-install-linux.sh
 
   # CodeQL 安全扫描(与 test 并行;安全标签页按 job 名识别,与独立工作流等效)
   analyze:

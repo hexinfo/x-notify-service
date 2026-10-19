@@ -1,10 +1,12 @@
 # Release:打 v* 标签 → 三平台打包 → 发布到 GitHub Releases
 # 正式发版流程:测试由 ci.yml 在 main 上把关,这里只做打包与发布
 #
-# 产物:Linux tar.xz(x86_64/aarch64)+ Windows NSIS setup.exe
+# 产物:Linux 双架构合一 tar.xz(x86_64 + aarch64,install.sh 按架构自动选)
+#       + Windows NSIS setup.exe
 # 说明:Linux 在 Debian 10 容器内编译(glibc 2.28 地板,兼容 UOS 20/麒麟 V10
 #       等老 glibc 系统,产出可跑在 ≥2.28 的所有发行版);脚本自带 GLIBC 断言。
-#       linux-aarch64 使用 GitHub 原生 arm64 runner(公开仓库免费)
+#       两架构分别用 GitHub 原生 amd64/arm64 runner 编译(公开仓库免费),
+#       linux-pack job 汇总两份二进制组装合一 tar.xz
 
 name: release
 
@@ -39,16 +41,12 @@ jobs:
           path: target/linux-x86_64
           key: linux-x86_64-target-${{ hashFiles('Cargo.lock') }}
           restore-keys: linux-x86_64-target-
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 24
-      - run: npm install -g pnpm@10
-      - run: ./scripts/pack-linux.sh x86_64
-      - run: sh scripts/ci/test-install-linux.sh
+      - run: ./scripts/pack-linux.sh build x86_64
+      # 裸二进制交给 linux-pack 汇总组装(单文件 artifact 落根,下载到分架构目录消歧)
       - uses: actions/upload-artifact@v4
         with:
-          name: linux-x86_64-tarxz
-          path: dist/*.tar.xz
+          name: linux-x86_64-bin
+          path: target/linux-x86_64/release/x-notify-service
 
   linux-aarch64:
     runs-on: ubuntu-24.04-arm
@@ -61,15 +59,35 @@ jobs:
             target
           key: linux-aarch64-cargo-${{ hashFiles('Cargo.lock') }}
           restore-keys: linux-aarch64-cargo-
+      - run: ./scripts/pack-linux.sh build aarch64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-aarch64-bin
+          path: target/linux-aarch64/release/x-notify-service
+
+  # 双架构合一:下载两份二进制 → 组装单一 tar.xz → 安装器 mock 冒烟
+  linux-pack:
+    needs: [linux-x86_64, linux-aarch64]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
+        with:
+          name: linux-x86_64-bin
+          path: bin-staging/x86_64
+      - uses: actions/download-artifact@v4
+        with:
+          name: linux-aarch64-bin
+          path: bin-staging/aarch64
       - uses: actions/setup-node@v5
         with:
           node-version: 24
       - run: npm install -g pnpm@10
-      - run: ./scripts/pack-linux.sh aarch64
+      - run: ./scripts/pack-linux.sh pack bin-staging/x86_64/x-notify-service bin-staging/aarch64/x-notify-service
       - run: sh scripts/ci/test-install-linux.sh
       - uses: actions/upload-artifact@v4
         with:
-          name: linux-aarch64-tarxz
+          name: linux-tarxz
           path: dist/*.tar.xz
 
   windows:
@@ -107,7 +125,7 @@ jobs:
           path: dist/*.exe
 
   publish:
-    needs: [linux-x86_64, linux-aarch64, windows]
+    needs: [linux-pack, windows]
     # 仅 tag 推送才发布;workflow_dispatch 干跑不碰 Releases
     if: github.event_name == 'push'
     runs-on: ubuntu-24.04
@@ -132,12 +150,12 @@ jobs:
             --notes "正式发布 $TAG · commit ${GITHUB_SHA::8} · $(date -u '+%Y-%m-%d %H:%M UTC')
 
           #### 产物
-          - Linux x86_64 / aarch64: tar.xz 绿色版(解压后 ./install.sh,免 root)
+          - Linux(x86_64/aarch64 同包,安装时自动识别架构): tar.xz 绿色版(解压后 ./install.sh,免 root)
           - Windows: setup.exe(per-user 免 UAC)
 
           #### 验证
           \`\`\`bash
-          md5sum bin/x-notify-service   # 与 Release 说明或下发渠道核对
+          md5sum bin/x86_64/x-notify-service bin/aarch64/x-notify-service   # 与 Release 说明或下发渠道核对
           x-notify-service info         # 诊断快照(工作区/落点/注册状态)
           x-notify-service notify -t \"手测\"
           \`\`\`

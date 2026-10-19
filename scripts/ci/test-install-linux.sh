@@ -11,7 +11,7 @@ XDG_CONFIG_HOME=$HOME/'config with spaces'
 XDG_STATE_HOME=$HOME/'state with spaces'
 export HOME XDG_DATA_HOME XDG_CONFIG_HOME XDG_STATE_HOME
 PKG=$TMP/package
-mkdir -p "$PKG/bin" "$PKG/config" "$PKG/icons" "$HOME/.local/bin" "$XDG_CONFIG_HOME/x-notify-service" "$XDG_DATA_HOME/x-notify-service" "$XDG_STATE_HOME/x-notify-service"
+mkdir -p "$PKG/bin/x86_64" "$PKG/bin/aarch64" "$PKG/config" "$PKG/icons" "$HOME/.local/bin" "$XDG_CONFIG_HOME/x-notify-service" "$XDG_DATA_HOME/x-notify-service" "$XDG_STATE_HOME/x-notify-service"
 cp -R "$SCRIPT_DIR/../../assets/icons/hicolor" "$PKG/icons/"
 [ -f "$PKG/icons/hicolor/x-notify-service-32.png" ]
 cp "$INSTALLER" "$PKG/install.sh"
@@ -28,19 +28,29 @@ cat > "$HOME/.local/bin/x-notify-service" <<'EOF'
 printf '%s\n' "$1" >> "$HOME/old-calls"
 EOF
 chmod +x "$HOME/.local/bin/x-notify-service"
-cat > "$PKG/bin/x-notify-service" <<'EOF'
+# 双架构 mock 二进制:执行时把自己的架构记入 picked-arch,用于断言 uname -m 选对了文件
+for mock_arch in x86_64 aarch64; do
+    cat > "$PKG/bin/$mock_arch/x-notify-service" <<EOF
 #!/bin/sh
-printf '%s\n' "$1" >> "$HOME/new-calls"
-if [ "$1" = notify ]; then printf '%s\n' "$*" >> "$HOME/notify-args"; fi
-case "$1" in
-    --version) [ ! -f "$HOME/fail-version" ] ;;
-    install) [ ! -f "$HOME/fail-install" ] ;;
-    notify) [ ! -f "$HOME/fail-notify" ] ;;
+printf '%s\n' '$mock_arch' >> "\$HOME/picked-arch"
+printf '%s\n' "\$1" >> "\$HOME/new-calls"
+if [ "\$1" = notify ]; then printf '%s\n' "\$*" >> "\$HOME/notify-args"; fi
+case "\$1" in
+    --version) [ ! -f "\$HOME/fail-version" ] ;;
+    install) [ ! -f "\$HOME/fail-install" ] ;;
+    notify) [ ! -f "\$HOME/fail-notify" ] ;;
 esac
 EOF
-chmod +x "$PKG/bin/x-notify-service"
+    chmod +x "$PKG/bin/$mock_arch/x-notify-service"
+done
 
 "$PKG/install.sh" </dev/null >"$TMP/output" 2>&1 || { sed -n '1,80p' "$TMP/output" >&2; exit 1; }
+case "$(uname -m)" in
+    x86_64) real_pick=x86_64 ;;
+    aarch64|arm64) real_pick=aarch64 ;;
+    *) real_pick= ;;
+esac
+if [ -n "$real_pick" ]; then [ "$(sed -n 1p "$HOME/picked-arch")" = "$real_pick" ]; fi
 [ "$(cat "$HOME/old-calls")" = uninstall ]
 [ "$(grep -c '^install$' "$HOME/new-calls")" = 1 ]
 [ "$(grep -c '^notify$' "$HOME/new-calls")" = 1 ]
@@ -95,7 +105,7 @@ XDG_DATA_HOME=$HOME/blocked-data
 export XDG_DATA_HOME
 printf 'not a directory\n' > "$XDG_DATA_HOME"
 mkdir -p "$TMP/early-tools"
-for tool in dirname mkdir rm; do ln -s "$(command -v "$tool")" "$TMP/early-tools/$tool"; done
+for tool in dirname mkdir rm uname; do ln -s "$(command -v "$tool")" "$TMP/early-tools/$tool"; done
 test_path=$PATH
 PATH=$TMP/early-tools
 export PATH
@@ -105,4 +115,40 @@ PATH=$test_path
 export PATH
 [ "$status" -eq 1 ]
 [ "$(grep -c '^notify$' "$HOME/new-calls")" -eq "$((before + 1))" ]
+
+# 架构探测:x86_64/aarch64 各自命中对应二进制,未知架构明确报错且不做安装动作。
+XDG_DATA_HOME=$HOME/'data with spaces'
+export XDG_DATA_HOME
+before=$(grep -c '^install$' "$HOME/new-calls")
+mkdir -p "$TMP/arch-tools"
+for fake in x86_64 aarch64; do
+    cat > "$TMP/arch-tools/uname" <<EOF
+#!/bin/sh
+printf '%s\n' '$fake'
+EOF
+    chmod +x "$TMP/arch-tools/uname"
+    saved_path=$PATH
+    PATH=$TMP/arch-tools:$PATH
+    export PATH
+    "$PKG/install.sh" </dev/null >>"$TMP/output" 2>&1
+    PATH=$saved_path
+    export PATH
+    [ "$(tail -1 "$HOME/picked-arch")" = "$fake" ] || { echo "FAIL: $fake 未命中对应二进制" >&2; exit 1; }
+done
+[ "$(grep -c '^install$' "$HOME/new-calls")" -eq "$((before + 2))" ]
+
+cat > "$TMP/arch-tools/uname" <<'EOF'
+#!/bin/sh
+printf '%s\n' riscv64
+EOF
+status=0
+saved_path=$PATH
+PATH=$TMP/arch-tools:$PATH
+export PATH
+"$PKG/install.sh" </dev/null >>"$TMP/output" 2>&1 || status=$?
+PATH=$saved_path
+export PATH
+[ "$status" -eq 1 ]
+grep -q '不支持的 CPU 架构' "$TMP/output" || { echo 'FAIL: 未知架构未报错' >&2; exit 1; }
+[ "$(grep -c '^install$' "$HOME/new-calls")" -eq "$((before + 2))" ]
 echo 'PASS: Linux installer mock checks'
