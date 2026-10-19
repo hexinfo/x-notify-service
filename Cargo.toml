@@ -119,6 +119,8 @@ str_to_string = "allow"
 mod_module_files = "allow" # 项目规范用 mod.rs(html/mod.rs)
 pub_use = "allow" # html 门面模式(对外仅 4 符号)是架构决策
 multiple_inherent_impl = "allow" # 按平台/职责分 impl 块是本库组织方式
+definition_in_module_root = "allow" # 1.99 新增;与既有 mod_module_files 豁免(项目规范用 mod.rs)直接冲突
+rest_pattern_accessible_field = "allow" # 1.99 新增;.. 匹配内部枚举无关字段是惯用法
 
 # 二进制 crate,无外部 API 消费者,库 API 类 lint 豁免
 exhaustive_enums = "allow"
