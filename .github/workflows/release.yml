@@ -105,15 +105,18 @@ jobs:
         with:
           node-version: 24
       - run: npm install -g pnpm@10
-      # NSIS 直装官方 zip:choco 社区源 503 时会"0/0 假成功"(退 0 实际没装),
-      # makensis 缺失拖到打包步才爆;官方 zip 不经第三方源
-      - name: 安装 NSIS(官方 zip)
+      # NSIS 从本仓库 Release 资产安装(自托管 zip):choco 社区源 503 假成功、
+      # SourceForge 直连被 Azure runner 拒——GitHub 自家下载零第三方依赖
+      - name: 安装 NSIS(仓库资产 zip)
         shell: pwsh
         run: |
+          $ErrorActionPreference = 'Stop'
           $dir = "$env:RUNNER_TEMP\nsis"
-          Invoke-WebRequest -Uri 'https://prdownloads.sourceforge.net/nsis/nsis-3.13.zip' -OutFile "$env:RUNNER_TEMP\nsis.zip"
+          curl.exe -fsSL -o "$env:RUNNER_TEMP\nsis.zip" `
+            https://github.com/hexinfo/x-notify-service/releases/download/nsis-3.13/nsis-3.13.zip
           Expand-Archive "$env:RUNNER_TEMP\nsis.zip" -DestinationPath $dir
           Add-Content $env:GITHUB_PATH "$dir\nsis-3.13"
+          & "$dir\nsis-3.13\makensis.exe" /VERSION
       - run: bash scripts/pack-windows.sh x86_64-pc-windows-msvc
         shell: bash
       - shell: pwsh
