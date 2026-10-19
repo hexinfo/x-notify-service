@@ -104,9 +104,16 @@ jobs:
           node-version: 24
       - if: runner.os == 'Windows'
         run: npm install -g pnpm@10
+      # NSIS 直装官方 zip:choco 社区源 503 时会"0/0 假成功"(退 0 实际没装),
+      # makensis 缺失拖到打包步才爆;官方 zip 不经第三方源
       - if: runner.os == 'Windows'
-        run: choco install nsis -y --no-progress && echo "C:\Program Files (x86)\NSIS" >> $GITHUB_PATH
-        shell: bash
+        name: 安装 NSIS(官方 zip)
+        shell: pwsh
+        run: |
+          $dir = "$env:RUNNER_TEMP\nsis"
+          Invoke-WebRequest -Uri 'https://prdownloads.sourceforge.net/nsis/nsis-3.13.zip' -OutFile "$env:RUNNER_TEMP\nsis.zip"
+          Expand-Archive "$env:RUNNER_TEMP\nsis.zip" -DestinationPath $dir
+          Add-Content $env:GITHUB_PATH "$dir\nsis-3.13"
       - if: runner.os == 'Linux'
         run: ./scripts/pack-linux.sh build ${{ matrix.name == 'linux-x86_64' && 'x86_64' || 'aarch64' }}
       # 裸二进制交给 pack-linux job 组装验证(与 release 的 linux-pack 同路径)

@@ -105,9 +105,15 @@ jobs:
         with:
           node-version: 24
       - run: npm install -g pnpm@10
-      # windows-latest 不预装 NSIS:choco 安装(setup.exe 打包器)并注入 PATH
-      - run: choco install nsis -y --no-progress && echo "C:\Program Files (x86)\NSIS" >> $GITHUB_PATH
-        shell: bash
+      # NSIS 直装官方 zip:choco 社区源 503 时会"0/0 假成功"(退 0 实际没装),
+      # makensis 缺失拖到打包步才爆;官方 zip 不经第三方源
+      - name: 安装 NSIS(官方 zip)
+        shell: pwsh
+        run: |
+          $dir = "$env:RUNNER_TEMP\nsis"
+          Invoke-WebRequest -Uri 'https://prdownloads.sourceforge.net/nsis/nsis-3.13.zip' -OutFile "$env:RUNNER_TEMP\nsis.zip"
+          Expand-Archive "$env:RUNNER_TEMP\nsis.zip" -DestinationPath $dir
+          Add-Content $env:GITHUB_PATH "$dir\nsis-3.13"
       - run: bash scripts/pack-windows.sh x86_64-pc-windows-msvc
         shell: bash
       - shell: pwsh
