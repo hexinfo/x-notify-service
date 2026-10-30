@@ -1,4 +1,4 @@
-; x-notify-service Windows 安装器(NSIS 薄壳 + MUI2)
+﻿; x-notify-service Windows 安装器(NSIS 薄壳 + MUI2)
 ; 设计:per-user 免 UAC、可选安装目录、LZMA 压缩、完成页「启动服务」复选框;
 ;      注册/启动逻辑只在二进制内(x-notify-service.exe install),脚本不含第二套逻辑。
 ; 单包双架构:安装器内含 x64/x86 双二进制,安装时按系统位数自动选

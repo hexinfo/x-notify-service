@@ -3380,7 +3380,7 @@ dependencies = [
 
 [[package]]
 name = "x-notify-service"
-version = "3.4.1"
+version = "3.4.2"
 dependencies = [
  "clap",
  "dirs",

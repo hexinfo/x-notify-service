@@ -31,8 +31,10 @@ export RUSTFLAGS='-C target-feature=+crt-static -C link-arg=/LARGEADDRESSAWARE -
 for T in "$X64_TARGET" "$X86_TARGET"; do
     echo "==> cargo build --release --target $T (-Zbuild-std)"
     cargo build --release --target "$T" -Zbuild-std=std
-    # Win7 兼容闸门:导入表禁止 Win8+/Win10+ 硬导入与动态 CRT 依赖(防回归)
-    "$PY" scripts/ci/check_win7_imports.py "target/$T/release/x-notify-service.exe"
+    # Win7 兼容闸门:--fix-combase 把 dirs-sys 经 windows-sys 0.61 绑到
+    # combase.dll(Win8+)的 CoTaskMemFree 原地改回 ole32.dll(Win7 有);
+    # 再校验导入表禁止 Win8+/Win10+ 硬导入与动态 CRT 依赖(防回归)
+    "$PY" scripts/ci/check_win7_imports.py "target/$T/release/x-notify-service.exe" --fix-combase
 done
 
 rm -rf "$STAGE"
