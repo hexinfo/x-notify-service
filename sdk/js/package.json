@@ -1,6 +1,6 @@
 {
   "name": "x-notify-service-js",
-  "version": "3.4.2",
+  "version": "3.4.3",
   "description": "x-notify-service JS SDK monorepo(sdk + demo)",
   "type": "module",
   "private": true,

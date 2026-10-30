@@ -10,9 +10,7 @@ use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::mpsc::{Receiver, SyncSender, sync_channel};
 use std::time::{Duration, Instant};
 
-use iced::font::Family;
-#[cfg(not(windows))]
-use iced::font::Weight;
+use iced::font::{Family, Weight};
 use iced::widget::container::Style as ContainerStyle;
 use iced::widget::{Column, container, markdown, mouse_area, row, text};
 use iced::{Color, Element, Font, Length, Padding, Subscription, Task, Theme, daemon, window};
@@ -101,7 +99,10 @@ impl AckWaiter {
 #[cfg(target_os = "macos")]
 const UI_FONT_FAMILY: &str = "PingFang SC";
 #[cfg(windows)]
-const UI_FONT_FAMILY: &str = "Microsoft YaHei UI";
+// 必须用 "Microsoft YaHei"(微软雅黑,Win7 即有)而非 "Microsoft YaHei UI":
+// UI 变体是 Win8+ 新增的家族名,Win7 匹配失败会回退到简体覆盖不全的字体,
+// 「单/办/条」等字渲染为豆腐块;YaHei 本体在 Win7~Win11 全系列存在
+const UI_FONT_FAMILY: &str = "Microsoft YaHei";
 #[cfg(all(unix, not(target_os = "macos")))]
 const UI_FONT_FAMILY: &str = "Noto Sans CJK SC";
 
@@ -112,13 +113,8 @@ const UI_FONT: Font = Font {
 
 const TITLE_FONT_SIZE: f32 = 16.0;
 
-#[cfg(windows)]
-const TITLE_FONT: Font = Font {
-    family: Family::Name("Microsoft YaHei UI Bold"),
-    ..Font::DEFAULT
-};
-
-#[cfg(not(windows))]
+// 全平台统一「家族名 + Weight::Bold」:YaHei 粗体是真实字面(msyhbd.ttf,
+// Win7 即有),不走仿粗体;不再按 "…Bold" 家族名取(Win7 无此名)
 const TITLE_FONT: Font = Font {
     family: Family::Name(UI_FONT_FAMILY),
     weight: Weight::Bold,
@@ -668,23 +664,11 @@ mod tests {
         assert!((super::TITLE_FONT_SIZE - 16.0).abs() < f32::EPSILON);
     }
 
-    #[cfg(windows)]
     #[test]
-    fn windows_title_requests_bold_face_by_name() {
+    fn title_requests_bold_weight_of_ui_family() {
         use iced::font::{Family, Weight};
 
-        assert_eq!(
-            super::TITLE_FONT.family,
-            Family::Name("Microsoft YaHei UI Bold")
-        );
-        assert_eq!(super::TITLE_FONT.weight, Weight::Normal);
-    }
-
-    #[cfg(not(windows))]
-    #[test]
-    fn other_platform_titles_remain_bold() {
-        use iced::font::Weight;
-
+        assert_eq!(super::TITLE_FONT.family, Family::Name(super::UI_FONT_FAMILY));
         assert_eq!(super::TITLE_FONT.weight, Weight::Bold);
     }
 
