@@ -17,3 +17,6 @@ sdk/js/**/dist
 .zcode/
 .video_agent
 .idea
+
+# 本地 ZCode 工具配置
+.zcodeignore
