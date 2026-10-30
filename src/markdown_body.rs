@@ -56,6 +56,8 @@ pub fn to_plain_text(source: &str) -> String {
 }
 
 /// Escape a plain body before handing it to a notification server that parses markup.
+/// 仅系统通知兜底(unix)消费;Windows 构建不编入。
+#[cfg(unix)]
 fn escape_notification_markup(plain_text: &str) -> String {
     plain_text
         .replace('&', "&amp;")
@@ -64,6 +66,8 @@ fn escape_notification_markup(plain_text: &str) -> String {
 }
 
 /// Escape only when the notification server advertises body markup support.
+/// 仅系统通知兜底(unix)消费;Windows 构建不编入。
+#[cfg(unix)]
 pub fn notification_body_for_capabilities(plain_text: &str, supports_markup: bool) -> Cow<'_, str> {
     if supports_markup {
         Cow::Owned(escape_notification_markup(plain_text))
@@ -110,7 +114,7 @@ fn collect_text(node: &Node, out: &mut String) {
 
 #[cfg(test)]
 mod tests {
-    use super::{notification_body_for_capabilities, sanitize_for_text_view, to_plain_text};
+    use super::{sanitize_for_text_view, to_plain_text};
 
     #[test]
     fn raw_html_is_literal_markdown_input() {
@@ -154,8 +158,12 @@ mod tests {
         assert_eq!(to_plain_text("待办 <b>1</b> 条"), "待办 <b>1</b> 条");
     }
 
+    // 被测函数仅 unix 编入(Windows 无系统通知兜底),测试同步门控
+    #[cfg(all(test, unix))]
     #[test]
     fn markup_capable_server_receives_escaped_literal_html() {
+        use super::notification_body_for_capabilities;
+
         let plain = to_plain_text("**待办** <b>1</b> &amp;");
         assert_eq!(
             notification_body_for_capabilities(&plain, true),
@@ -163,8 +171,12 @@ mod tests {
         );
     }
 
+    // 被测函数仅 unix 编入(Windows 无系统通知兜底),测试同步门控
+    #[cfg(all(test, unix))]
     #[test]
     fn server_without_markup_receives_literal_plain_text() {
+        use super::notification_body_for_capabilities;
+
         assert_eq!(
             notification_body_for_capabilities("待办 <b>1</b> &", false),
             "待办 <b>1</b> &"

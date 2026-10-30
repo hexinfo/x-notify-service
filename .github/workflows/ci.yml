@@ -97,7 +97,17 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: .
-          shared-key: release-windows-msvc
+          shared-key: release-windows-win7
+      # Win7 兼容目标 *-win7-windows-msvc 无预编译 std,需 nightly -Zbuild-std
+      # 源码编 std(钉死版本保证可复现);仅 Windows 腿需要,Linux 在容器内自带工具链
+      - if: runner.os == 'Windows'
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          toolchain: nightly-2026-09-08
+          components: rust-src
+      - if: runner.os == 'Windows'
+        run: rustup default nightly-2026-09-08
+        shell: bash
       - if: runner.os == 'Windows'
         uses: actions/setup-node@v5
         with:
@@ -126,18 +136,20 @@ jobs:
           name: ${{ matrix.name }}-bin
           path: target/linux-${{ matrix.name == 'linux-x86_64' && 'x86_64' || 'aarch64' }}/release/x-notify-service
       - if: runner.os == 'Windows'
-        run: bash scripts/pack-windows.sh x86_64-pc-windows-msvc
+        run: bash scripts/pack-windows.sh
         shell: bash
       - if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $setup = Get-ChildItem dist/*-windows-x86_64-setup.exe | Select-Object -First 1
-          & ./scripts/ci/test-windows-clean-upgrade.ps1 -Setup $setup.FullName -ServiceExe ./target/x86_64-pc-windows-msvc/release/x-notify-service.exe
-      # Windows 产物冒烟:GUI 子系统经 AttachConsole 回显到本控制台
+          $setup = Get-ChildItem dist/*-windows-setup.exe | Select-Object -First 1
+          & ./scripts/ci/test-windows-clean-upgrade.ps1 -Setup $setup.FullName -ServiceExe ./target/x86_64-win7-windows-msvc/release/x-notify-service.exe
+      # Windows 产物冒烟:GUI 子系统经 AttachConsole 回显到本控制台;
+      # i686 版在 x64 runner 上经 WOW64 同样点一遍,双架构产物都验到
       - if: runner.os == 'Windows'
         run: |
-          ./target/x86_64-pc-windows-msvc/release/x-notify-service.exe --version
-          ./target/x86_64-pc-windows-msvc/release/x-notify-service.exe info | head -5
+          ./target/x86_64-win7-windows-msvc/release/x-notify-service.exe --version
+          ./target/x86_64-win7-windows-msvc/release/x-notify-service.exe info | head -5
+          ./target/i686-win7-windows-msvc/release/x-notify-service.exe --version
         shell: bash
 
   # 双架构合一打包验证:下载两架构二进制,组装合一 tar.xz 并跑安装器 mock 测试

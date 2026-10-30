@@ -1,6 +1,9 @@
 ; x-notify-service Windows 安装器(NSIS 薄壳 + MUI2)
 ; 设计:per-user 免 UAC、可选安装目录、LZMA 压缩、完成页「启动服务」复选框;
 ;      注册/启动逻辑只在二进制内(x-notify-service.exe install),脚本不含第二套逻辑。
+; 单包双架构:安装器内含 x64/x86 双二进制,安装时按系统位数自动选
+;      (与 Linux 双架构合一 tar.xz 同思路;32 位 NSIS 安装器在 64 位系统照常运行,
+;       HKCU 无注册表重定向,x64 二进制由 32 位安装器启动亦无障碍)
 ; 构建: makensis -DSTAGE=<staging> -DVERSION=<ver> scripts/pack-windows.nsi
 
 Unicode true
@@ -15,7 +18,7 @@ ManifestDPIAware true
 !define MUI_UNICON "${STAGE}\x-notify-service.ico"
 
 Name "${APPNAME} ${VERSION}"
-OutFile "dist\${APPNAME}-${VERSION}-windows-x86_64-setup.exe"
+OutFile "dist\${APPNAME}-${VERSION}-windows-setup.exe"
 InstallDir "$LOCALAPPDATA\Programs\Hexinfo\${APPNAME}"
 InstallDirRegKey HKCU "${APPKEY}" "InstallDir"
 RequestExecutionLevel user
@@ -23,6 +26,7 @@ ShowUninstDetails show
 
 !include "MUI2.nsh"
 !include "LogicLib.nsh"
+!include "x64.nsh"
 
 
 !insertmacro MUI_PAGE_DIRECTORY
@@ -76,7 +80,13 @@ Section "安装"
     nsExec::Exec 'taskkill /F /IM ${APPNAME}.exe'
 
     SetOutPath "$INSTDIR"
-    File "${STAGE}\x-notify-service.exe"
+    ; 单包双架构:64 位系统装 x64 二进制,32 位系统(含 32 位 Win7)装 i686 版;
+    ; 落地文件名统一为 x-notify-service.exe,注册/卸载/升级逻辑无感
+    ${If} ${RunningX64}
+        File "${STAGE}\x-notify-service.exe"
+    ${Else}
+        File /oname=x-notify-service.exe "${STAGE}\x-notify-service-x86.exe"
+    ${EndIf}
     SetOverwrite off
     File /nonfatal "${STAGE}\config.toml"
     SetOverwrite on

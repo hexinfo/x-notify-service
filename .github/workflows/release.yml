@@ -93,6 +93,8 @@ jobs:
   windows:
     # 原生 Windows 编译机:MSVC 一等工具链(rc.exe 嵌图标零配置),
     # 且产物可在构建机真实冒烟(交叉编译做不到);公开仓库 runner 免费
+    # Win7 兼容:*-win7-windows-msvc 目标(tier 3,无预编译 std)由 nightly
+    # -Zbuild-std 源码编 std;单 setup.exe 内含 x64/x86 双二进制按位数自动选
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v5
@@ -100,7 +102,14 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: .
-          shared-key: release-windows-msvc
+          shared-key: release-windows-win7
+      # 钉死 nightly 版本保证可复现;-Zbuild-std 仅 nightly 可用
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          toolchain: nightly-2026-09-08
+          components: rust-src
+      - run: rustup default nightly-2026-09-08
+        shell: bash
       - uses: actions/setup-node@v5
         with:
           node-version: 24
@@ -117,16 +126,18 @@ jobs:
           Expand-Archive "$env:RUNNER_TEMP\nsis.zip" -DestinationPath $dir
           Add-Content $env:GITHUB_PATH "$dir\nsis-3.13"
           & "$dir\nsis-3.13\makensis.exe" /VERSION
-      - run: bash scripts/pack-windows.sh x86_64-pc-windows-msvc
+      - run: bash scripts/pack-windows.sh
         shell: bash
       - shell: pwsh
         run: |
-          $setup = Get-ChildItem dist/*-windows-x86_64-setup.exe | Select-Object -First 1
-          & ./scripts/ci/test-windows-clean-upgrade.ps1 -Setup $setup.FullName -ServiceExe ./target/x86_64-pc-windows-msvc/release/x-notify-service.exe
-      # 产物冒烟:GUI 子系统经 AttachConsole 回显到本控制台
+          $setup = Get-ChildItem dist/*-windows-setup.exe | Select-Object -First 1
+          & ./scripts/ci/test-windows-clean-upgrade.ps1 -Setup $setup.FullName -ServiceExe ./target/x86_64-win7-windows-msvc/release/x-notify-service.exe
+      # 产物冒烟:GUI 子系统经 AttachConsole 回显到本控制台;
+      # i686 版在 x64 runner 上经 WOW64 同样点一遍,双架构产物都验到
       - run: |
-          ./target/x86_64-pc-windows-msvc/release/x-notify-service.exe --version
-          ./target/x86_64-pc-windows-msvc/release/x-notify-service.exe info | head -5
+          ./target/x86_64-win7-windows-msvc/release/x-notify-service.exe --version
+          ./target/x86_64-win7-windows-msvc/release/x-notify-service.exe info | head -5
+          ./target/i686-win7-windows-msvc/release/x-notify-service.exe --version
         shell: bash
       - uses: actions/upload-artifact@v4
         with:
@@ -160,7 +171,7 @@ jobs:
 
           #### 产物
           - Linux(x86_64/aarch64 同包,安装时自动识别架构): tar.xz 绿色版(解压后 ./install.sh,免 root)
-          - Windows: setup.exe(per-user 免 UAC)
+          - Windows: setup.exe(per-user 免 UAC,Win7~Win11 单包,安装时自动选 32/64 位)
 
           #### 验证
           \`\`\`bash

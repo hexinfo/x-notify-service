@@ -26,7 +26,6 @@ fn start_server(cfg_override: impl FnOnce(&mut Config)) -> u16 {
         cors_origins: vec!["*".into()],
         allow_private_network: true,
         token: None,
-        app_id: None,
     };
     cfg_override(&mut cfg);
     crate::server::start(cfg)

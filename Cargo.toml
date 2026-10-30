@@ -1,6 +1,6 @@
 [package]
 name = "x-notify-service"
-version = "3.3.0"
+version = "3.4.0"
 edition = "2024"
 publish = ["crates-io"]
 description = "跨平台消息通知服务:浏览器调用 → 右下角置顶弹窗(系统通知兜底)"
@@ -10,7 +10,6 @@ tiny_http = "0.12"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 toml = "0.9"
-notify-rust = "4"
 flexi_logger = { version = "0.31", default-features = false, features = ["async"] }
 log = "0.4"
 clap = { version = "4", features = ["derive"] }
@@ -33,6 +32,11 @@ iced = { version = "0.14", default-features = false, features = [
     "thread-pool",
 ] }
 
+[target.'cfg(unix)'.dependencies]
+# 系统通知兜底仅 unix(Linux DBus / macOS):notify-rust 的 Windows 后端是
+# WinRT(Win8+ 才有),静态导入会让产物在 Win7 上加载失败,故 Windows 不编入
+notify-rust = "4"
+
 [target.'cfg(windows)'.dependencies]
 winreg = "0.55"
 windows-sys = { version = "0.61", features = [
@@ -43,6 +47,7 @@ windows-sys = { version = "0.61", features = [
     "Win32_Graphics_Gdi",
     "Win32_System_Threading",
     "Win32_System_Console",
+    "Win32_System_LibraryLoader",
     "Win32_Storage_FileSystem",
     "Win32_Security",
 ] }

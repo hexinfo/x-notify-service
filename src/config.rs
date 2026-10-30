@@ -41,10 +41,6 @@ pub struct Cli {
     #[arg(long)]
     pub no_popup: bool,
 
-    /// Windows 兜底通知的 AppId(默认 PowerShell)
-    #[arg(long)]
-    pub app_id: Option<String>,
-
     #[command(subcommand)]
     pub cmd: Option<Command>,
 }
@@ -120,9 +116,6 @@ pub struct Config {
     pub allow_private_network: bool,
     /// 非空时 /notify 与 /close 需带匹配的 X-Token 头;空 = 无鉴权(默认)
     pub token: Option<String>,
-    /// Windows 兜底通知的 AppId(仅 Windows 读取)
-    #[cfg_attr(not(windows), allow(dead_code))]
-    pub app_id: Option<String>,
 }
 
 #[derive(Debug, Default, serde::Deserialize)]
@@ -131,7 +124,6 @@ struct FileConfig {
     log_level: Option<String>,
     log_dir: Option<PathBuf>,
     no_popup: Option<bool>,
-    app_id: Option<String>,
     cors_origins: Option<Vec<String>>,
     allow_private_network: Option<bool>,
     token: Option<String>,
@@ -189,7 +181,6 @@ pub fn resolve(cli: &Cli) -> Config {
         cors_origins: file.cors_origins.unwrap_or_else(|| vec!["*".into()]),
         allow_private_network: file.allow_private_network.unwrap_or(true),
         token: file.token.filter(|t| !t.is_empty()),
-        app_id: cli.app_id.clone().or(file.app_id),
     }
 }
 
