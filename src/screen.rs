@@ -1,6 +1,6 @@
 /// 屏幕主显示器「工作区」(排除任务栏/dock/菜单栏),原点左上。
-/// 所有坐标已统一换算为物理像素;scale 仅供逻辑尺寸(弹窗宽高)换算,
-/// Windows/Linux 为 1.0,macOS 为 backingScaleFactor。
+/// 所有坐标已统一换算为物理像素;scale 为物理→逻辑换算系数,
+/// Windows 为系统 DPI/96(缩放屏非 1.0),Linux 为 1.0,macOS 为 backingScaleFactor。
 #[derive(Debug, Clone, Copy)]
 pub struct WorkArea {
     pub x: f64,
@@ -11,10 +11,12 @@ pub struct WorkArea {
 }
 
 #[cfg(windows)]
-// 取屏 FFI 是 unsafe 的唯一入口;仅调用 SystemParametersInfoW 读取工作区矩形
+// 取屏 FFI 是 unsafe 的唯一入口;SystemParametersInfoW 读工作区,
+// GetDeviceCaps 读系统 DPI(Win7 即有,GetDpiForSystem 为 Win8+ 不可用)
 #[allow(unsafe_code)]
 pub fn work_area() -> Option<WorkArea> {
     use windows_sys::Win32::Foundation::RECT;
+    use windows_sys::Win32::Graphics::Gdi::{GetDC, GetDeviceCaps, LOGPIXELSX, ReleaseDC};
     use windows_sys::Win32::UI::WindowsAndMessaging::{SPI_GETWORKAREA, SystemParametersInfoW};
 
     let mut rect = RECT {
@@ -35,12 +37,31 @@ pub fn work_area() -> Option<WorkArea> {
     if ok == 0 {
         return None;
     }
+    // 系统 DPI → 缩放系数:落点/尺寸换算逻辑坐标全靠它。此前写死 1.0,
+    // 缩放屏(125%/150%)上物理落点被 winit 当逻辑坐标再乘一遍缩放后
+    // 飞出屏幕,表现为「通知已投递但看不见弹窗」(浙商版 2560x1440 终端实测)。
+    // 此时 winit 已置进程 DPI aware,SPI_GETWORKAREA/GetDeviceCaps 返回真实值。
+    let scale = {
+        // SAFETY: 取屏 DC 仅做同步 DPI 查询后配对释放
+        let hdc = unsafe { GetDC(std::ptr::null_mut()) };
+        if hdc.is_null() {
+            1.0
+        } else {
+            // SAFETY: hdc 有效;LOGPIXELSX 常量索引只读
+            let dpi = unsafe { GetDeviceCaps(hdc, LOGPIXELSX.cast_signed()).max(96) };
+            // SAFETY: 与 GetDC 配对释放
+            unsafe {
+                ReleaseDC(std::ptr::null_mut(), hdc);
+            }
+            f64::from(dpi) / 96.0
+        }
+    };
     Some(WorkArea {
         x: f64::from(rect.left),
         y: f64::from(rect.top),
         w: f64::from(rect.right - rect.left),
         h: f64::from(rect.bottom - rect.top),
-        scale: 1.0,
+        scale,
     })
 }
 
