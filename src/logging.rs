@@ -21,9 +21,11 @@ pub fn init(cfg: &Config) -> Option<LoggerHandle> {
         .basename(crate::config::APP_DIR_NAME)
         .suppress_timestamp();
 
-    // 兜底 "info" 是字面合法级别,此分支实际不可达;万一失败则降级为无日志运行
-    let base = match Logger::try_with_env_or_str(&cfg.log_level)
-        .or_else(|_| Logger::try_with_str("info"))
+    // 全局默认 warn:第三方依赖(iced_winit 的 "Window attributes"、winit、
+    // cosmic-text 等)的 INFO 调试日志不混入产品日志;本 crate 按用户配置级别
+    let spec_str = format!("warn, x_notify_service={}", cfg.log_level);
+    let base = match Logger::try_with_env_or_str(&spec_str)
+        .or_else(|_| Logger::try_with_str("warn, x_notify_service=info"))
     {
         Ok(b) => b,
         Err(e) => {

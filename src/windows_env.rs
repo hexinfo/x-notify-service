@@ -5,18 +5,32 @@
 /// GUI 子系统二进制无控制台:从 cmd/PowerShell 启动 CLI 子命令时把输出接回
 /// 调用方终端(AttachConsole 父进程);双击/自启动/安装器等无控制台场景
 /// 挂接失败,保持静默,不影响服务运行。
+/// stdout 已被重定向(`info > out.txt`、管道、CI 捕获)时保持原句柄——
+/// 此时挂控制台会把重定向内容整个丢掉(真机 Win7 实测 info 空输出)。
 #[cfg(windows)]
 // 取屏 FFI 同款豁免:仅此一处 Win32 控制台挂接
 #[allow(unsafe_code, clippy::multiple_unsafe_ops_per_block)]
 pub fn attach_parent_console() {
     use windows_sys::Win32::Foundation::{GENERIC_WRITE, INVALID_HANDLE_VALUE};
-    use windows_sys::Win32::Storage::FileSystem::{CreateFileW, FILE_SHARE_WRITE, OPEN_EXISTING};
+    use windows_sys::Win32::Storage::FileSystem::{
+        CreateFileW, FILE_SHARE_WRITE, FILE_TYPE_DISK, FILE_TYPE_PIPE, GetFileType,
+        OPEN_EXISTING,
+    };
     use windows_sys::Win32::System::Console::{
-        ATTACH_PARENT_PROCESS, AttachConsole, STD_ERROR_HANDLE, STD_OUTPUT_HANDLE, SetStdHandle,
+        ATTACH_PARENT_PROCESS, AttachConsole, GetStdHandle, STD_ERROR_HANDLE, STD_OUTPUT_HANDLE,
+        SetStdHandle,
     };
 
     // SAFETY: 常量入参;句柄仅转交标准设备表,失败即原样返回静默运行
     unsafe {
+        // stdout 已重定向(磁盘文件或管道)时不碰标准句柄,保住重定向语义
+        let stdout = GetStdHandle(STD_OUTPUT_HANDLE);
+        let redirected = !stdout.is_null()
+            && stdout != INVALID_HANDLE_VALUE
+            && matches!(GetFileType(stdout), FILE_TYPE_DISK | FILE_TYPE_PIPE);
+        if redirected {
+            return;
+        }
         if AttachConsole(ATTACH_PARENT_PROCESS) == 0 {
             return;
         }

@@ -132,14 +132,17 @@ fn serve(cfg: &config::Config) {
         }
     }
 
-    // daemon:弹窗窗口关闭不会结束事件循环(服务常驻语义)
-    if let Err(e) = notify::app::run_service() {
-        log::error!("GUI 事件循环异常退出: {e}");
-        // 通道已断,后续通知转系统通知兜底
-        notify::POPUP_AVAILABLE.store(false, std::sync::atomic::Ordering::Relaxed);
-        #[allow(clippy::infinite_loop)]
-        loop {
-            std::thread::park();
-        }
+    // daemon:弹窗窗口关闭不会结束事件循环(服务常驻语义)。
+    // GUI 崩溃(含 panic)不连坐进程:只降级弹窗,HTTP 主进程继续常驻
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(notify::app::run_service));
+    match result {
+        Ok(Ok(())) => log::warn!("GUI 事件循环已退出"),
+        Ok(Err(e)) => log::error!("GUI 事件循环异常退出: {e}"),
+        Err(_) => log::error!("GUI 事件循环 panic,弹窗不可用"),
+    }
+    notify::POPUP_AVAILABLE.store(false, std::sync::atomic::Ordering::Relaxed);
+    #[allow(clippy::infinite_loop)]
+    loop {
+        std::thread::park();
     }
 }
