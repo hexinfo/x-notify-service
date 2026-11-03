@@ -380,13 +380,14 @@ fn notify(
     state.body = markdown::parse(&sanitized).collect();
     let (px, py) = popup::landing(&area, size);
     log::info!(
-        "弹窗定位: 工作区({},{},{}x{}) → ({px},{py}),尺寸 {}x{}",
+        "弹窗定位: 工作区({},{},{}x{}) → ({px},{py}),尺寸 {}x{},缩放 {:.2}(物理落点除以它为窗口逻辑坐标)",
         area.x,
         area.y,
         area.w,
         area.h,
         size.width,
-        size.height
+        size.height,
+        area.scale
     );
     if let Some(id) = state.window {
         match (state.pending_ack.take(), ack) {
